@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { toast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import AuthShell from "@/components/AuthShell";
+import { getAuthErrorMessage } from "@/lib/authErrors";
 import {
   hasValidationErrors,
   normalizeEmail,
@@ -77,7 +78,7 @@ const SignUp = () => {
         return toast({ title: "Email already exists", description: "Use login or forgot password instead.", variant: "destructive" });
       }
 
-      return toast({ title: "Sign up failed", description: error.message, variant: "destructive" });
+      return toast({ title: "Sign up failed", description: getAuthErrorMessage(error), variant: "destructive" });
     }
 
     if (data.user && Array.isArray(data.user.identities) && data.user.identities.length === 0) {

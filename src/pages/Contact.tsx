@@ -9,7 +9,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Mail, MapPin, Phone } from "lucide-react";
 
 const contactItems = [
-  { icon: Mail, title: "Email", desc: "support@mindsense.com" },
+  { icon: Mail, title: "Email", desc: "shahrukh.bsse4377@iiu.edu.pk" },
   { icon: Phone, title: "Phone", desc: "+92 308-8540903" },
   { icon: MapPin, title: "Location", desc: "Islamabad, Pakistan" },
   { icon: MapPin, title: "Address", desc: "International Islamic University Islamabad" },
@@ -31,7 +31,7 @@ const Contact = () => {
 
   return (
     <div className="premium-page min-h-screen overflow-hidden">
-      <Navbar />
+      <Navbar showNavigation={false} />
 
       <main className="container relative mx-auto flex min-h-[calc(100svh-5.5rem)] flex-col justify-center px-4 py-5 md:px-6">
         <div className="premium-grid absolute inset-0 opacity-35" />

@@ -9,6 +9,7 @@ type TextAnswer = {
 };
 
 export type ResourceRecommendationContext = {
+  hasSignals: boolean;
   moodLabel: string;
   primaryMood: ResourceMoodCategory;
   reasons: string[];
@@ -33,6 +34,17 @@ export const buildResourceContext = (moods: MoodEntry[], latestTest: DepressionT
   const recent = [...moods]
     .sort((a, b) => new Date(b.entry_date).getTime() - new Date(a.entry_date).getTime())
     .slice(0, 7);
+  const hasSignals = recent.length > 0 || Boolean(latestTest);
+
+  if (!hasSignals) {
+    return {
+      hasSignals: false,
+      moodLabel: "No wellness data yet",
+      primaryMood: "mindfulness",
+      reasons: ["Log your mood or complete the depression test to unlock personalized resources"],
+    };
+  }
+
   const latest = recent[0];
   const tags = recent.flatMap((entry) => entry.tags || []);
   const avg = (values: number[]) => (values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : null);
@@ -74,21 +86,21 @@ export const buildResourceContext = (moods: MoodEntry[], latestTest: DepressionT
   if (reasons.length === 0) reasons.push("start with general mindfulness resources");
 
   const moodLabel = primaryMood.replace(/_/g, " ");
-  return { moodLabel, primaryMood, reasons };
+  return { hasSignals: true, moodLabel, primaryMood, reasons };
 };
 
 export const recommendResources = (
   resources: Resource[],
   context: ResourceRecommendationContext,
-  bookmarkedIds: Set<string>,
 ) => {
+  if (!context.hasSignals) return [];
+
   const scored = resources
     .filter((resource) => resource.is_published)
     .map((resource) => {
       let score = 0;
       if (resource.mood_category === context.primaryMood) score += 8;
       if (resource.featured) score += 3;
-      if (bookmarkedIds.has(resource.id)) score += 1;
       if (context.primaryMood === "stressed" && resource.tags?.some((tag) => ["breathing", "calm", "stress"].includes(tag.toLowerCase()))) score += 3;
       if (context.primaryMood === "sleep_support" && resource.tags?.some((tag) => tag.toLowerCase().includes("sleep"))) score += 3;
       if (context.primaryMood === "low_motivation" && resource.tags?.some((tag) => ["motivation", "productivity", "focus"].includes(tag.toLowerCase()))) score += 3;

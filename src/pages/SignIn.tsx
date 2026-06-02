@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { toast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import AuthShell from "@/components/AuthShell";
+import { getAuthErrorMessage } from "@/lib/authErrors";
 import {
   hasValidationErrors,
   normalizeEmail,
@@ -49,7 +50,7 @@ const SignIn = () => {
       password,
     });
     setLoading(false);
-    if (error) return toast({ title: "Sign in failed", description: error.message, variant: "destructive" });
+    if (error) return toast({ title: "Sign in failed", description: getAuthErrorMessage(error), variant: "destructive" });
     toast({ title: "Welcome back!" });
     navigate("/dashboard", { replace: true });
   };

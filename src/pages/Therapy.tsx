@@ -1,12 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   AlertTriangle,
   ArrowRight,
   Brain,
   CheckCircle2,
-  ClipboardList,
   Copy,
   Heart,
   HeartHandshake,
@@ -23,6 +22,7 @@ import {
   ShieldCheck,
   Sparkles,
   Sun,
+  Trash2,
   UserRound,
   Volume2,
   Waves,
@@ -37,7 +37,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import type { Json, Tables } from "@/integrations/supabase/types";
-import { DIRECTORY_CITIES, PAKISTAN_MENTAL_HEALTH_DIRECTORY, type MentalHealthProvider } from "@/data/pakistanMentalHealthDirectory";
+import { PAKISTAN_MENTAL_HEALTH_DIRECTORY } from "@/data/pakistanMentalHealthDirectory";
 import {
   buildSupportPlan,
   type DepressionTest,
@@ -47,6 +47,21 @@ import {
 
 type SupportActivity = Tables<"support_activity_history">;
 type MeditationStreak = Tables<"meditation_streaks">;
+type ProfessionalRecord = Tables<"mental_health_professionals">;
+
+type DirectoryProfessional = {
+  id: string;
+  name: string;
+  role: string;
+  specialization: string;
+  city: string;
+  location: string;
+  address: string | null;
+  phone: string | null;
+  map_url: string | null;
+  featured?: boolean;
+  verification_status?: string;
+};
 
 type ActivityPayload = {
   activity_type: string;
@@ -70,10 +85,7 @@ type AudioTrack = {
   icon: LucideIcon;
   color: string;
   detail: string;
-  baseFrequency: number;
-  secondaryFrequency: number;
-  waveform: OscillatorType;
-  modulationRate: number;
+  src: string;
 };
 
 const QUOTES = [
@@ -102,66 +114,65 @@ const MEDITATION_SESSIONS: MeditationSession[] = [
 
 const TRACKS: AudioTrack[] = [
   {
-    id: "stress-calm-tone",
-    name: "Stress Relief Tone",
+    id: "rain-stress-relief",
+    name: "Rain Stress Relief",
     category: "stress relief",
     icon: Waves,
     color: "from-sky-400 to-cyan-500",
-    detail: "Steady calming tone for stress release",
-    baseFrequency: 174,
-    secondaryFrequency: 261,
-    waveform: "sine",
-    modulationRate: 0.08,
+    detail: "Soft rain ambience for pressure, tension, and overthinking.",
+    src: "/audio/wellness/rain.mp3",
   },
   {
-    id: "sleep-calm-tone",
-    name: "Sleep Calm Tone",
+    id: "calm-sleep-ambient",
+    name: "Calm Sleep Ambient",
     category: "sleep",
     icon: Moon,
     color: "from-indigo-400 to-violet-500",
-    detail: "Low, slow tone bed for bedtime",
-    baseFrequency: 110,
-    secondaryFrequency: 196,
-    waveform: "sine",
-    modulationRate: 0.05,
+    detail: "Gentle calm audio for slowing down before sleep.",
+    src: "/audio/wellness/calm.mp3",
   },
   {
-    id: "focus-steady-tone",
-    name: "Focus Steady Tone",
+    id: "soft-piano-focus",
+    name: "Soft Piano Focus",
     category: "focus",
     icon: Music2,
     color: "from-cyan-400 to-blue-500",
-    detail: "Clean stable tone for focused work",
-    baseFrequency: 220,
-    secondaryFrequency: 330,
-    waveform: "sine",
-    modulationRate: 0.12,
+    detail: "Light piano for studying, journaling, and low-distraction work.",
+    src: "/audio/wellness/piano.mp3",
   },
   {
-    id: "meditation-soft-tone",
-    name: "Meditation Soft Tone",
+    id: "nature-meditation",
+    name: "Nature Meditation",
     category: "meditation",
     icon: Brain,
     color: "from-teal-300 to-emerald-500",
-    detail: "Warm tone for quiet sitting",
-    baseFrequency: 136,
-    secondaryFrequency: 256,
-    waveform: "sine",
-    modulationRate: 0.07,
+    detail: "Natural ambience for breathing, grounding, and quiet sitting.",
+    src: "/audio/wellness/nature.mp3",
   },
   {
-    id: "relaxation-gentle-tone",
-    name: "Relaxation Gentle Tone",
+    id: "ocean-relaxation",
+    name: "Ocean Relaxation",
     category: "relaxation",
     icon: Sun,
     color: "from-teal-400 to-sky-500",
-    detail: "Gentle tone for a calm reset",
-    baseFrequency: 128,
-    secondaryFrequency: 240,
-    waveform: "sine",
-    modulationRate: 0.06,
+    detail: "Ocean soundscape for calm resets and emotional decompression.",
+    src: "/audio/wellness/ocean.mp3",
   },
 ];
+
+const FALLBACK_PROFESSIONALS: DirectoryProfessional[] = PAKISTAN_MENTAL_HEALTH_DIRECTORY.map((person) => ({
+  id: person.id,
+  name: person.name,
+  role: person.role,
+  specialization: person.specialization,
+  city: person.city,
+  location: person.location,
+  address: person.address,
+  phone: person.phone ?? null,
+  map_url: null,
+  featured: false,
+  verification_status: "public_source",
+}));
 
 type SleepTip = {
   icon: LucideIcon;
@@ -243,24 +254,6 @@ const getYesterdayKey = () => {
 
 const isMissingSupportTableError = (message?: string) =>
   Boolean(message?.includes("schema cache") || message?.includes("does not exist"));
-
-const recommendationIcon: Record<SupportRecommendation["category"], LucideIcon> = {
-  assessment: ClipboardList,
-  audio: Music2,
-  breathing: Wind,
-  journaling: Heart,
-  meditation: Brain,
-  professional: HeartHandshake,
-  sleep: Moon,
-};
-
-const toneClass: Record<SupportRecommendation["tone"], string> = {
-  primary: "border-primary/30 bg-primary/12 text-primary",
-  calm: "border-teal-300/30 bg-teal-300/10 text-teal-200",
-  sleep: "border-violet-300/30 bg-violet-300/10 text-violet-200",
-  focus: "border-sky-300/30 bg-sky-300/10 text-sky-200",
-  urgent: "border-amber-300/35 bg-amber-300/12 text-amber-100",
-};
 
 function Hero() {
   const [idx, setIdx] = useState(() => Math.floor(Math.random() * QUOTES.length));
@@ -355,119 +348,6 @@ function CrisisSupportCard() {
             or nearby hospital.
           </div>
         </div>
-      </div>
-    </section>
-  );
-}
-
-function PersonalizedSupportPlan({
-  plan,
-  loading,
-  onStart,
-}: {
-  plan: ReturnType<typeof buildSupportPlan>;
-  loading: boolean;
-  onStart: (recommendation: SupportRecommendation) => void;
-}) {
-  return (
-    <section className="grid gap-5 xl:grid-cols-[minmax(0,1.25fr)_minmax(20rem,0.75fr)]">
-      <div className="premium-card relative overflow-hidden p-5 md:p-6">
-        <div className="premium-grid pointer-events-none absolute inset-0 opacity-20" />
-        <div className="relative">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <h2 className="flex items-center gap-2 text-xl font-bold">
-                <ClipboardList className="h-5 w-5 text-primary" />
-                Personalized Support Plan
-              </h2>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Recommendations update from your latest assessment, mood trend, sleep, energy, and tags.
-              </p>
-            </div>
-            {loading && (
-              <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-xs text-muted-foreground">
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                Loading data
-              </span>
-            )}
-          </div>
-
-          <div className="mt-5 grid gap-3 md:grid-cols-3">
-            <SupportSignalCard label="Assessment" value={plan.depression.label} detail={plan.depression.wellnessScore === null ? "No score yet" : `${plan.depression.wellnessScore}/100 wellness`} />
-            <SupportSignalCard label="Mood data" value={plan.mood.latestMood === null ? "Not logged" : `${plan.mood.latestMood}/5 latest`} detail={`${plan.mood.entriesUsed} recent entries used`} />
-            <SupportSignalCard
-              label="Multimodal"
-              value={`${plan.depression.hasVoice ? "Voice" : "No voice"} / ${plan.depression.hasVideo ? "Video" : "No video"}`}
-              detail={plan.depression.createdAt ? `Last test ${formatDateTime(plan.depression.createdAt)}` : "Assessment pending"}
-            />
-          </div>
-
-          <div className="mt-5 grid gap-3 lg:grid-cols-2">
-            {plan.recommendations.slice(0, 4).map((item) => (
-              <RecommendationCard key={item.id} item={item} onStart={onStart} />
-            ))}
-          </div>
-        </div>
-      </div>
-
-      <TodayActionCard item={plan.todayAction} onStart={onStart} />
-    </section>
-  );
-}
-
-function SupportSignalCard({ label, value, detail }: { label: string; value: string; detail: string }) {
-  return (
-    <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
-      <div className="text-xs font-bold uppercase tracking-[0.14em] text-muted-foreground">{label}</div>
-      <div className="mt-2 text-lg font-extrabold">{value}</div>
-      <div className="mt-1 text-xs leading-5 text-muted-foreground">{detail}</div>
-    </div>
-  );
-}
-
-function RecommendationCard({ item, onStart }: { item: SupportRecommendation; onStart: (recommendation: SupportRecommendation) => void }) {
-  const Icon = recommendationIcon[item.category];
-  return (
-    <motion.div whileHover={{ y: -3 }} className={`rounded-2xl border p-4 ${toneClass[item.tone]}`}>
-      <div className="flex items-start gap-3">
-        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-current/20 bg-black/10">
-          <Icon className="h-5 w-5" />
-        </div>
-        <div className="min-w-0 flex-1">
-          <h3 className="font-bold text-foreground">{item.title}</h3>
-          <p className="mt-1 text-sm leading-5 text-muted-foreground">{item.detail}</p>
-          <p className="mt-2 text-xs leading-5 text-current/80">{item.reason}</p>
-          <button type="button" onClick={() => onStart(item)} className="mt-3 inline-flex items-center gap-1 text-sm font-bold text-primary">
-            {item.action}
-            <ArrowRight className="h-3.5 w-3.5" />
-          </button>
-        </div>
-      </div>
-    </motion.div>
-  );
-}
-
-function TodayActionCard({ item, onStart }: { item: SupportRecommendation; onStart: (recommendation: SupportRecommendation) => void }) {
-  const Icon = recommendationIcon[item.category];
-
-  return (
-    <section className="premium-card relative overflow-hidden p-5 md:p-6">
-      <div className="premium-grid pointer-events-none absolute inset-0 opacity-20" />
-      <div className="pointer-events-none absolute -right-16 -top-16 h-48 w-48 rounded-full bg-primary/15 blur-3xl" />
-      <div className="relative">
-        <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-primary/20 bg-primary/10 text-primary">
-          <Icon className="h-5 w-5" />
-        </div>
-        <div className="mt-5 text-xs font-bold uppercase tracking-[0.16em] text-primary">Today's Recommended Action</div>
-        <h2 className="mt-3 text-2xl font-extrabold leading-tight">{item.title}</h2>
-        <p className="mt-3 text-sm leading-6 text-muted-foreground">{item.detail}</p>
-        <div className="mt-4 rounded-2xl border border-white/10 bg-white/[0.04] p-3 text-sm leading-6 text-muted-foreground">
-          {item.reason}
-        </div>
-        <Button className="premium-button mt-5 w-full" onClick={() => onStart(item)}>
-          {item.action}
-          <ArrowRight className="h-4 w-4" />
-        </Button>
       </div>
     </section>
   );
@@ -768,91 +648,6 @@ function Meditation({
   );
 }
 
-type AudioNodes = {
-  context: AudioContext;
-  master: GainNode;
-  stop: () => void;
-};
-
-function getAudioContextClass() {
-  return window.AudioContext || (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-}
-
-function createTonePlayer(track: AudioTrack, volume: number): AudioNodes | null {
-  const AudioClass = getAudioContextClass();
-  if (!AudioClass) return null;
-  const context = new AudioClass();
-  const master = context.createGain();
-  const filter = context.createBiquadFilter();
-  const lfo = context.createOscillator();
-  const lfoGain = context.createGain();
-
-  const oscillatorA = context.createOscillator();
-  const oscillatorB = context.createOscillator();
-  const oscillatorC = context.createOscillator();
-  const gainA = context.createGain();
-  const gainB = context.createGain();
-  const gainC = context.createGain();
-
-  const baseVolume = (volume / 100) * 0.16;
-  master.gain.value = baseVolume;
-  filter.type = "lowpass";
-  filter.frequency.value = 1400;
-  filter.Q.value = 0.8;
-  filter.connect(master);
-  master.connect(context.destination);
-
-  oscillatorA.type = track.waveform;
-  oscillatorB.type = "sine";
-  oscillatorC.type = "sine";
-  oscillatorA.frequency.value = track.baseFrequency;
-  oscillatorB.frequency.value = track.secondaryFrequency;
-  oscillatorC.frequency.value = track.baseFrequency * 2;
-  gainA.gain.value = 0.42;
-  gainB.gain.value = 0.2;
-  gainC.gain.value = 0.08;
-  oscillatorA.connect(gainA);
-  oscillatorB.connect(gainB);
-  oscillatorC.connect(gainC);
-  gainA.connect(filter);
-  gainB.connect(filter);
-  gainC.connect(filter);
-
-  lfo.type = "sine";
-  lfo.frequency.value = track.modulationRate;
-  lfoGain.gain.value = baseVolume * 0.22;
-  lfo.connect(lfoGain);
-  lfoGain.connect(master.gain);
-
-  master.gain.setValueAtTime(0.0001, context.currentTime);
-  master.gain.exponentialRampToValueAtTime(Math.max(baseVolume, 0.0001), context.currentTime + 0.35);
-
-  oscillatorA.start();
-  oscillatorB.start();
-  oscillatorC.start();
-  lfo.start();
-  if (context.state === "suspended") void context.resume();
-
-  return {
-    context,
-    master,
-    stop: () => {
-      master.gain.cancelScheduledValues(context.currentTime);
-      master.gain.setTargetAtTime(0.0001, context.currentTime, 0.08);
-      window.setTimeout(() => {
-        [oscillatorA, oscillatorB, oscillatorC, lfo].forEach((node) => {
-          try {
-            node.stop();
-          } catch {
-            // The node may already be stopped after quick repeated clicks.
-          }
-        });
-        context.close().catch(() => undefined);
-      }, 140);
-    },
-  };
-}
-
 function Music({
   recommendedCategory,
   onPlay,
@@ -864,40 +659,58 @@ function Music({
   const [playing, setPlaying] = useState(false);
   const [volume, setVolume] = useState(70);
   const [progress, setProgress] = useState(0);
-  const [favorites, setFavorites] = useState<Set<string>>(new Set());
-  const nodesRef = useRef<AudioNodes | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
 
   const stopAudio = useCallback(() => {
-    nodesRef.current?.stop();
-    nodesRef.current = null;
+    if (!audioRef.current) return;
+    audioRef.current.pause();
+    audioRef.current.currentTime = 0;
+    audioRef.current.src = "";
+    audioRef.current = null;
   }, []);
 
   const startTrack = useCallback(
     (track: AudioTrack, index: number) => {
       stopAudio();
-      const nodes = createTonePlayer(track, volume);
-      if (!nodes) {
-        toast({ title: "Audio is not available", description: "This browser does not support tone playback.", variant: "destructive" });
-        return;
-      }
-      nodesRef.current = nodes;
+      const audio = new Audio(track.src);
+      audio.loop = true;
+      audio.volume = volume / 100;
+      audio.preload = "auto";
+      audioRef.current = audio;
       setActive(index);
-      setPlaying(true);
       setProgress(0);
-      onPlay(track);
+      audio.play()
+        .then(() => {
+          if (audioRef.current !== audio) return;
+          setPlaying(true);
+          onPlay(track);
+        })
+        .catch(() => {
+          if (audioRef.current === audio) {
+            stopAudio();
+            setActive(null);
+          }
+          setPlaying(false);
+          toast({ title: "Audio could not start", description: "Click play again or check that the audio file is available.", variant: "destructive" });
+        });
     },
     [onPlay, stopAudio, volume],
   );
 
   useEffect(() => {
-    const nodes = nodesRef.current;
-    if (!nodes) return;
-    nodes.master.gain.setTargetAtTime((volume / 100) * 0.18, nodes.context.currentTime, 0.08);
+    if (audioRef.current) audioRef.current.volume = volume / 100;
   }, [volume]);
 
   useEffect(() => {
     if (!playing) return;
-    const id = window.setInterval(() => setProgress((value) => (value + 0.45) % 100), 250);
+    const id = window.setInterval(() => {
+      const audio = audioRef.current;
+      if (!audio || !Number.isFinite(audio.duration) || audio.duration <= 0) {
+        setProgress((value) => (value + 0.35) % 100);
+        return;
+      }
+      setProgress((audio.currentTime / audio.duration) * 100);
+    }, 250);
     return () => window.clearInterval(id);
   }, [playing]);
 
@@ -914,7 +727,7 @@ function Music({
             <Music2 className="h-5 w-5 text-primary" />
             Wellness Audio
           </h2>
-          <p className="mt-1 text-sm text-muted-foreground">Stable calming tones by support category. No random noise or simulated rain effects.</p>
+          <p className="mt-1 text-sm text-muted-foreground">Real calming audio for rain, nature, ocean, piano, sleep, and relaxation support.</p>
         </div>
         <span className="rounded-full border border-primary/20 bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
           Suggested: {recommendedCategory}
@@ -933,7 +746,7 @@ function Music({
               whileTap={{ scale: 0.98 }}
               onClick={() => {
                 if (active === index && playing) {
-                  stopAudio();
+                  audioRef.current?.pause();
                   setPlaying(false);
                   return;
                 }
@@ -992,10 +805,16 @@ function Music({
               className="rounded-full bg-primary text-primary-foreground"
               onClick={() => {
                 if (playing) {
-                  stopAudio();
+                  audioRef.current?.pause();
                   setPlaying(false);
                 } else {
-                  startTrack(activeTrack, active);
+                  if (audioRef.current) {
+                    audioRef.current.play().then(() => setPlaying(true)).catch(() => {
+                      toast({ title: "Audio could not resume", description: "Try selecting the track again.", variant: "destructive" });
+                    });
+                  } else {
+                    startTrack(activeTrack, active);
+                  }
                 }
               }}
             >
@@ -1008,22 +827,6 @@ function Music({
           <div className="mt-4 flex items-center gap-3">
             <Volume2 className="h-4 w-4 text-muted-foreground" />
             <input type="range" min={0} max={100} value={volume} onChange={(event) => setVolume(Number(event.target.value))} className="flex-1 accent-primary" />
-            <Button
-              size="sm"
-              variant="outline"
-              className="rounded-full border-white/10 bg-white/[0.04]"
-              onClick={() =>
-                setFavorites((current) => {
-                  const next = new Set(current);
-                  if (next.has(activeTrack.id)) next.delete(activeTrack.id);
-                  else next.add(activeTrack.id);
-                  return next;
-                })
-              }
-            >
-              <Heart className={`h-3.5 w-3.5 ${favorites.has(activeTrack.id) ? "fill-current" : ""}`} />
-              {favorites.has(activeTrack.id) ? "Saved" : "Favorite"}
-            </Button>
           </div>
         </div>
       )}
@@ -1163,7 +966,7 @@ function Sleep({ onComplete }: { onComplete: (payload: ActivityPayload) => void 
   );
 }
 
-function SessionHistory({ activities }: { activities: SupportActivity[] }) {
+function SessionHistory({ activities, onDelete }: { activities: SupportActivity[]; onDelete: (activity: SupportActivity) => void }) {
   return (
     <section className="premium-card p-5 md:p-6">
       <div>
@@ -1186,11 +989,23 @@ function SessionHistory({ activities }: { activities: SupportActivity[] }) {
                     {activity.activity_type} - {formatDateTime(activity.completed_at)}
                   </div>
                 </div>
-                {activity.duration_seconds > 0 && (
-                  <span className="rounded-full border border-white/10 bg-black/10 px-3 py-1 text-xs text-muted-foreground">
-                    {formatTime(activity.duration_seconds)}
-                  </span>
-                )}
+                <div className="flex items-center gap-2">
+                  {activity.duration_seconds > 0 && (
+                    <span className="rounded-full border border-white/10 bg-black/10 px-3 py-1 text-xs text-muted-foreground">
+                      {formatTime(activity.duration_seconds)}
+                    </span>
+                  )}
+                  <Button
+                    type="button"
+                    size="icon"
+                    variant="outline"
+                    className="h-9 w-9 rounded-full border-rose-300/20 bg-rose-400/10 text-rose-100 hover:bg-rose-400/15"
+                    onClick={() => onDelete(activity)}
+                    aria-label={`Delete ${activity.title}`}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
               </div>
             ))
           )}
@@ -1248,14 +1063,63 @@ function Affirmation() {
 function Professionals() {
   const [city, setCity] = useState("All");
   const [query, setQuery] = useState("");
+  const [professionals, setProfessionals] = useState<DirectoryProfessional[]>(FALLBACK_PROFESSIONALS);
+  const [loading, setLoading] = useState(true);
+  const [usingFallback, setUsingFallback] = useState(false);
+
+  const loadProfessionals = useCallback(async () => {
+    setLoading(true);
+    const { data, error } = await supabase
+      .from("mental_health_professionals")
+      .select("*")
+      .eq("is_published", true)
+      .order("featured", { ascending: false })
+      .order("city", { ascending: true })
+      .order("name", { ascending: true });
+
+    if (error) {
+      if (!isMissingSupportTableError(error.message)) {
+        toast({ title: "Could not load professional directory", description: error.message, variant: "destructive" });
+      }
+      setProfessionals(FALLBACK_PROFESSIONALS);
+      setUsingFallback(true);
+    } else {
+      setProfessionals(((data ?? []) as ProfessionalRecord[]).map((person) => ({
+        id: person.id,
+        name: person.name,
+        role: person.role,
+        specialization: person.specialization,
+        city: person.city,
+        location: person.location,
+        address: person.address,
+        phone: person.phone,
+        map_url: person.map_url,
+        featured: person.featured,
+        verification_status: person.verification_status,
+      })));
+      setUsingFallback(false);
+    }
+
+    setLoading(false);
+  }, []);
+
+  useEffect(() => {
+    void loadProfessionals();
+  }, [loadProfessionals]);
+
+  const cities = useMemo(
+    () => ["All", ...Array.from(new Set(professionals.map((item) => item.city))).sort()],
+    [professionals],
+  );
+
   const filtered = useMemo(
     () =>
-      PAKISTAN_MENTAL_HEALTH_DIRECTORY.filter(
+      professionals.filter(
         (person) =>
           (city === "All" || person.city === city) &&
-          [person.name, person.role, person.specialization, person.location, person.city].some((value) => value.toLowerCase().includes(query.toLowerCase())),
+          [person.name, person.role, person.specialization, person.location, person.city, person.address ?? ""].some((value) => value.toLowerCase().includes(query.toLowerCase())),
       ),
-    [city, query],
+    [city, professionals, query],
   );
 
   return (
@@ -1270,7 +1134,17 @@ function Professionals() {
             Publicly sourced mental health professionals and services in Pakistan. Professional listings should be independently verified before seeking medical consultation.
           </p>
         </div>
+        <Button variant="outline" className="rounded-full border-white/10 bg-white/[0.04]" onClick={() => void loadProfessionals()} disabled={loading}>
+          {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+          Refresh
+        </Button>
       </div>
+
+      {usingFallback && (
+        <div className="mt-4 rounded-2xl border border-amber-300/25 bg-amber-300/10 p-3 text-sm text-amber-100">
+          Directory database is not active yet, so MindSense is showing bundled public listings.
+        </div>
+      )}
 
       <div className="mt-5 flex flex-col gap-3 md:flex-row">
         <div className="relative flex-1">
@@ -1278,7 +1152,7 @@ function Professionals() {
           <Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search by name, specialization, city, or hospital" className="rounded-full border-white/10 bg-background pl-9" />
         </div>
         <div className="flex gap-2 overflow-x-auto">
-          {DIRECTORY_CITIES.map((item) => (
+          {cities.map((item) => (
             <button
               key={item}
               type="button"
@@ -1294,17 +1168,21 @@ function Professionals() {
       </div>
 
       <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-        {filtered.map((person) => (
-          <ProfessionalCard key={person.id} person={person} />
-        ))}
-        {filtered.length === 0 && <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-5 text-sm text-muted-foreground">No professionals found.</div>}
+        {loading ? (
+          Array.from({ length: 3 }).map((_, index) => (
+            <div key={index} className="h-64 animate-pulse rounded-2xl border border-white/10 bg-white/[0.04]" />
+          ))
+        ) : (
+          filtered.map((person) => <ProfessionalCard key={person.id} person={person} />)
+        )}
+        {!loading && filtered.length === 0 && <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-5 text-sm text-muted-foreground">No professionals found.</div>}
       </div>
     </section>
   );
 }
 
-function ProfessionalCard({ person }: { person: MentalHealthProvider }) {
-  const mapUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${person.location} ${person.address} ${person.city} Pakistan`)}`;
+function ProfessionalCard({ person }: { person: DirectoryProfessional }) {
+  const mapUrl = person.map_url || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${person.location} ${person.address ?? ""} ${person.city} Pakistan`)}`;
 
   return (
     <motion.div whileHover={{ y: -3 }} className="flex h-full flex-col rounded-2xl border border-white/10 bg-white/[0.04] p-4">
@@ -1313,7 +1191,10 @@ function ProfessionalCard({ person }: { person: MentalHealthProvider }) {
           <UserRound className="h-5 w-5" />
         </div>
         <div className="min-w-0">
-          <div className="font-bold">{person.name}</div>
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="font-bold">{person.name}</div>
+            {person.featured && <span className="rounded-full border border-primary/20 bg-primary/10 px-2 py-0.5 text-[10px] font-bold text-primary">Featured</span>}
+          </div>
           <div className="mt-1 text-xs leading-5 text-muted-foreground">{person.role}</div>
         </div>
       </div>
@@ -1345,7 +1226,6 @@ function ProfessionalCard({ person }: { person: MentalHealthProvider }) {
 }
 
 export default function Therapy() {
-  const navigate = useNavigate();
   const { user, loading: authLoading } = useAuth();
   const [loading, setLoading] = useState(true);
   const [moodEntries, setMoodEntries] = useState<MoodEntry[]>([]);
@@ -1446,30 +1326,6 @@ export default function Therapy() {
     [user],
   );
 
-  const handleRecommendationStart = useCallback(
-    (recommendation: SupportRecommendation) => {
-      void trackRecommendation(recommendation, "therapy_support_plan");
-      if (recommendation.route) {
-        navigate(recommendation.route);
-        return;
-      }
-      const targetId =
-        recommendation.category === "professional"
-          ? "professional-directory"
-          : recommendation.category === "audio"
-            ? "wellness-audio"
-            : recommendation.category === "sleep"
-              ? "sleep-tools"
-              : recommendation.category === "meditation"
-                ? "meditation-tools"
-                : recommendation.category === "breathing"
-                  ? "breathing-tools"
-                  : "therapy-tools";
-      document.getElementById(targetId)?.scrollIntoView({ behavior: "smooth", block: "start" });
-    },
-    [navigate, trackRecommendation],
-  );
-
   const handleMeditationComplete = useCallback(
     async (session: MeditationSession, durationSeconds: number) => {
       if (!user) {
@@ -1529,12 +1385,39 @@ export default function Therapy() {
     [logActivity, meditationStreak, user],
   );
 
+  const handleDeleteActivity = useCallback(
+    async (activity: SupportActivity) => {
+      if (!user) {
+        toast({ title: "Sign in required", description: "Please sign in to manage session history.", variant: "destructive" });
+        return;
+      }
+      if (!confirm(`Delete "${activity.title}" from session history?`)) return;
+
+      const { error } = await supabase
+        .from("support_activity_history")
+        .delete()
+        .eq("id", activity.id)
+        .eq("user_id", user.id);
+
+      if (error) {
+        if (isMissingSupportTableError(error.message)) {
+          toast({ title: "History tracking unavailable", description: "Session history deletion will work after account tracking is enabled.", variant: "destructive" });
+          return;
+        }
+        toast({ title: "Could not delete session", description: error.message, variant: "destructive" });
+        return;
+      }
+
+      setActivities((current) => current.filter((item) => item.id !== activity.id));
+      toast({ title: "Session deleted", description: "The record was removed from your history." });
+    },
+    [user],
+  );
+
   return (
     <DashboardLayout>
       <div className="space-y-5">
         <Hero />
-        <CrisisSupportCard />
-        <PersonalizedSupportPlan plan={supportPlan} loading={loading || authLoading} onStart={handleRecommendationStart} />
 
         <section id="therapy-tools">
           <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
@@ -1577,12 +1460,14 @@ export default function Therapy() {
           </div>
         </section>
 
-        <SessionHistory activities={activities} />
+        <SessionHistory activities={activities} onDelete={handleDeleteActivity} />
 
-        <div className="grid gap-5 xl:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)]">
-          <Affirmation />
+        <div className="space-y-5">
           <Professionals />
+          <Affirmation />
         </div>
+
+        <CrisisSupportCard />
 
         <div className="flex items-center justify-center gap-2 py-2 text-center text-xs text-muted-foreground">
           <ShieldCheck className="h-3.5 w-3.5" />

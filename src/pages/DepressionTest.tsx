@@ -1,40 +1,121 @@
-import { useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Brain, CheckCircle2, ClipboardList, Mic, Sparkles, Video } from "lucide-react";
+import { Activity, Brain, CheckCircle2, ClipboardList, Mic, Sparkles, Video } from "lucide-react";
 import DashboardLayout from "@/components/DashboardLayout";
 import Instructions from "@/components/test/Instructions";
 import TextTest from "@/components/test/TextTest";
 import VoiceTest from "@/components/test/VoiceTest";
 import VideoTest from "@/components/test/VideoTest";
+import AnalysisDashboard from "@/components/test/AnalysisDashboard";
 import Results from "@/components/test/Results";
+import { useAuth } from "@/hooks/useAuth";
+import { supabase } from "@/integrations/supabase/client";
+import type { Json, Tables } from "@/integrations/supabase/types";
+import { toast } from "@/components/ui/use-toast";
+import { updateHeaderTestCache } from "@/lib/headerCache";
+import {
+  buildFusionResult,
+  type AudioSignalMetrics,
+  type FusionResult,
+  type ScreeningAnswer,
+  type VideoSignalMetrics,
+} from "@/lib/depressionAnalysis";
 
-export type Phase = "intro" | "text" | "voice" | "video" | "result";
+export type Phase = "intro" | "text" | "voice" | "video" | "analysis" | "result";
 
 export type TestData = {
-  textAnswers: { question: string; answer: string; score: number }[];
+  textAnswers: ScreeningAnswer[];
   voicePath?: string;
   videoPath?: string;
+  audioMetrics?: AudioSignalMetrics;
+  videoMetrics?: VideoSignalMetrics;
 };
 
-const phaseOrder: Phase[] = ["intro", "text", "voice", "video", "result"];
+type DepressionTestRow = Tables<"depression_tests">;
+
+const phaseOrder: Phase[] = ["intro", "text", "voice", "video", "analysis", "result"];
 
 const phaseMeta: Record<Phase, { label: string; short: string; icon: typeof Sparkles }> = {
   intro: { label: "Prepare Assessment", short: "Prepare", icon: Sparkles },
   text: { label: "Questionnaire Analysis", short: "Text", icon: ClipboardList },
   voice: { label: "Voice Signal Capture", short: "Voice", icon: Mic },
   video: { label: "Video Emotion Capture", short: "Video", icon: Video },
+  analysis: { label: "Multimodal Fusion", short: "Fusion", icon: Activity },
   result: { label: "Wellness Report", short: "Report", icon: CheckCircle2 },
 };
 
 export default function DepressionTest() {
+  const { user } = useAuth();
   const [phase, setPhase] = useState<Phase>("intro");
   const [data, setData] = useState<TestData>({ textAnswers: [] });
+  const [analysisResult, setAnalysisResult] = useState<FusionResult | null>(null);
+  const saveStartedRef = useRef(false);
 
   const idx = phaseOrder.indexOf(phase);
   const progress = (idx / (phaseOrder.length - 1)) * 100;
   const CurrentIcon = phaseMeta[phase].icon;
 
-  const go = (p: Phase) => setPhase(p);
+  const go = useCallback((p: Phase) => setPhase(p), []);
+
+  const persistAssessment = useCallback(async () => {
+    if (saveStartedRef.current || !analysisResult) {
+      go("result");
+      return;
+    }
+
+    saveStartedRef.current = true;
+    if (!user || !data.voicePath || !data.videoPath || !data.audioMetrics || !data.videoMetrics) {
+      toast({
+        title: "Assessment saved locally only",
+        description: "MindSense could not confirm every required signal before saving.",
+        variant: "destructive",
+      });
+      go("result");
+      return;
+    }
+
+    const { data: savedTest, error } = await supabase
+      .from("depression_tests")
+      .insert({
+        user_id: user.id,
+        text_answers: data.textAnswers as unknown as Json,
+        voice_path: data.voicePath,
+        video_path: data.videoPath,
+        status: "completed",
+      })
+      .select("*")
+      .single();
+
+    if (error) {
+      toast({
+        title: "Assessment could not be saved",
+        description: error.message,
+        variant: "destructive",
+      });
+      go("result");
+      return;
+    }
+
+    updateHeaderTestCache(user.id, savedTest as DepressionTestRow);
+
+    const { error: resultError } = await supabase.from("results").insert({
+      user_id: user.id,
+      text_sentiment: `Questionnaire support signal ${analysisResult.textScore}/100`,
+      voice_emotion: `Voice signal ${analysisResult.audioScore}/100`,
+      face_emotion: `Video signal ${analysisResult.videoScore}/100`,
+      depression_level: analysisResult.severityLabel,
+      recommendation: analysisResult.recommendation,
+    });
+
+    if (resultError) {
+      toast({
+        title: "Report saved with limited analytics",
+        description: resultError.message,
+      });
+    }
+
+    go("result");
+  }, [analysisResult, data.audioMetrics, data.textAnswers, data.videoMetrics, data.videoPath, data.voicePath, go, user]);
 
   return (
     <DashboardLayout>
@@ -53,7 +134,7 @@ export default function DepressionTest() {
                 <span className="block gradient-text">guided with care.</span>
               </h1>
               <p className="mt-5 max-w-3xl text-base leading-7 text-muted-foreground md:text-lg">
-                Complete the questionnaire, then capture optional voice and video signals for the full multimodal MindSense report.
+                Complete all three required inputs: questionnaire, 20-second voice, and 20-second video. The final report uses a 50/25/25 fusion.
               </p>
 
               <div className="mt-7">
@@ -130,30 +211,52 @@ export default function DepressionTest() {
             )}
             {phase === "voice" && (
               <VoiceTest
-                onComplete={(path) => {
-                  setData((current) => ({ ...current, voicePath: path }));
+                onComplete={(path, metrics) => {
+                  setData((current) => ({ ...current, voicePath: path, audioMetrics: metrics }));
                   go("video");
                 }}
               />
             )}
             {phase === "video" && (
               <VideoTest
-                textAnswers={data.textAnswers}
-                voicePath={data.voicePath}
-                onComplete={(path) => {
-                  setData((current) => ({ ...current, videoPath: path }));
-                  go("result");
+                onComplete={(path, metrics) => {
+                  if (!data.audioMetrics) {
+                    toast({
+                      title: "Voice signal missing",
+                      description: "Please complete the voice step again before video analysis.",
+                      variant: "destructive",
+                    });
+                    go("voice");
+                    return;
+                  }
+
+                  const nextData = { ...data, videoPath: path, videoMetrics: metrics };
+                  const nextResult = buildFusionResult(nextData.textAnswers, data.audioMetrics, metrics);
+                  setData(nextData);
+                  setAnalysisResult(nextResult);
+                  saveStartedRef.current = false;
+                  go("analysis");
                 }}
               />
             )}
+            {phase === "analysis" && analysisResult && (
+              <AnalysisDashboard data={data} result={analysisResult} onComplete={persistAssessment} />
+            )}
             {phase === "result" && (
-              <Results
-                data={data}
-                onRetake={() => {
-                  setData({ textAnswers: [] });
-                  go("intro");
-                }}
-              />
+              analysisResult ? (
+                <Results
+                  data={data}
+                  result={analysisResult}
+                  onRetake={() => {
+                    setData({ textAnswers: [] });
+                    setAnalysisResult(null);
+                    saveStartedRef.current = false;
+                    go("intro");
+                  }}
+                />
+              ) : (
+                <Instructions onStart={() => go("text")} />
+              )
             )}
           </motion.div>
         </AnimatePresence>

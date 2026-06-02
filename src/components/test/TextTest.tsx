@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
-  BatteryLow,
   CheckCircle2,
   CloudRain,
   Heart,
@@ -12,58 +11,88 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import type { ScreeningAnswer } from "@/lib/depressionAnalysis";
 
-const QUESTIONS = [
-  "How has your mood been lately?",
-  "Have you been enjoying the things you usually like?",
-  "How energetic have you felt during the day?",
-  "Do you find yourself overthinking a lot recently?",
-  "How easy is it for you to get out of bed and start your day?",
-  "Have your sleeping habits changed recently?",
-  "Do you feel connected to the people around you?",
-  "How often do you blame yourself for small things?",
-  "Do you sometimes feel emotionally empty inside?",
-  "Have little problems been feeling bigger than usual?",
-  "How often do you feel like avoiding people or conversations?",
-  "Have you been getting irritated more easily lately?",
-  "How calm or relaxed have you felt recently?",
-  "Is it easy for you to focus on work or studies?",
-  "How hopeful do you feel about your future?",
-  "Have your eating habits changed lately?",
-  "Do you find it easy to express how you feel?",
-  "How confident have you been feeling about yourself?",
-  "Have you been feeling mentally stressed recently?",
-  "How emotionally exhausted do you feel these days?",
-  "If your life had a mood weather, what would it feel like today?",
+const QUESTIONS: Array<Pick<ScreeningAnswer, "id" | "question" | "domain">> = [
+  {
+    id: "interest",
+    question: "Over the past two weeks, how often have you had little interest or pleasure in doing things?",
+    domain: "interest",
+  },
+  {
+    id: "mood",
+    question: "Over the past two weeks, how often have you felt down, low, or hopeless?",
+    domain: "mood",
+  },
+  {
+    id: "sleep",
+    question: "How often have you had trouble sleeping, sleeping too much, or waking without feeling rested?",
+    domain: "sleep",
+  },
+  {
+    id: "energy",
+    question: "How often have you felt tired or had very little energy during the day?",
+    domain: "energy",
+  },
+  {
+    id: "appetite",
+    question: "How often has your appetite changed, either eating much less or much more than usual?",
+    domain: "appetite",
+  },
+  {
+    id: "self-view",
+    question: "How often have you felt bad about yourself or felt that you were not doing enough?",
+    domain: "self_view",
+  },
+  {
+    id: "focus",
+    question: "How often have you had trouble concentrating on study, work, reading, or daily tasks?",
+    domain: "focus",
+  },
+  {
+    id: "movement",
+    question: "How often have you felt physically slowed down, restless, or unable to settle?",
+    domain: "movement",
+  },
 ];
 
-const OPTIONS: { icon: LucideIcon; label: string; score: number; color: string; description: string }[] = [
-  { icon: Sparkles, label: "Great", score: 1, color: "#22d3ee", description: "Light, hopeful, steady" },
-  { icon: Sun, label: "Fine", score: 2, color: "#34d399", description: "Mostly okay" },
-  { icon: Waves, label: "Okay", score: 3, color: "#facc15", description: "Mixed or neutral" },
-  { icon: CloudRain, label: "Low", score: 4, color: "#fb923c", description: "Heavy or unsettled" },
-  { icon: BatteryLow, label: "Very Low", score: 5, color: "#fb7185", description: "Drained or overwhelmed" },
+const OPTIONS: { icon: LucideIcon; label: string; phqScore: number; color: string; description: string }[] = [
+  { icon: Sparkles, label: "Not at all", phqScore: 0, color: "#22d3ee", description: "This has not affected me" },
+  { icon: Sun, label: "Several days", phqScore: 1, color: "#34d399", description: "It happened sometimes" },
+  { icon: Waves, label: "More than half", phqScore: 2, color: "#facc15", description: "It happened often" },
+  { icon: CloudRain, label: "Nearly every day", phqScore: 3, color: "#fb923c", description: "It happened most days" },
 ];
 
 const ENCOURAGEMENTS: Record<number, string> = {
-  5: "You are moving through this with care.",
-  10: "Thank you for answering honestly.",
-  15: "Almost there. Keep going gently.",
-  19: "Just a couple more questions.",
+  2: "Thank you for answering honestly.",
+  4: "You are moving through this with care.",
+  6: "Almost there. Keep going gently.",
 };
 
 export default function TextTest({
   onComplete,
 }: {
-  onComplete: (answers: { question: string; answer: string; score: number }[]) => void;
+  onComplete: (answers: ScreeningAnswer[]) => void;
 }) {
   const [i, setI] = useState(0);
-  const [answers, setAnswers] = useState<{ question: string; answer: string; score: number }[]>([]);
+  const [answers, setAnswers] = useState<ScreeningAnswer[]>([]);
   const [done, setDone] = useState(false);
   const [encourage, setEncourage] = useState<string | null>(null);
 
   const handle = (option: (typeof OPTIONS)[number]) => {
-    const next = [...answers, { question: QUESTIONS[i], answer: option.label, score: option.score }];
+    const question = QUESTIONS[i];
+    const legacyScore = 1 + option.phqScore * (4 / 3);
+    const next = [
+      ...answers,
+      {
+        id: question.id,
+        question: question.question,
+        answer: option.label,
+        phqScore: option.phqScore,
+        score: Number(legacyScore.toFixed(2)),
+        domain: question.domain,
+      },
+    ];
     setAnswers(next);
     if (i + 1 >= QUESTIONS.length) {
       setDone(true);
@@ -138,7 +167,7 @@ export default function TextTest({
                 <Smile className="h-3.5 w-3.5" />
                 Question {i + 1}
               </div>
-              <h3 className="mt-5 max-w-4xl text-3xl font-extrabold leading-tight md:text-4xl">{QUESTIONS[i]}</h3>
+              <h3 className="mt-5 max-w-4xl text-3xl font-extrabold leading-tight md:text-4xl">{QUESTIONS[i].question}</h3>
               <div className="mt-8 grid grid-cols-1 gap-3 sm:grid-cols-5">
                 {OPTIONS.map((option, index) => {
                   const Icon = option.icon;
@@ -181,7 +210,7 @@ export default function TextTest({
               </div>
               <h3 className="mt-6 text-3xl font-extrabold">Questionnaire complete</h3>
               <p className="mx-auto mt-3 max-w-md text-sm leading-6 text-muted-foreground">
-                Your text responses are recorded for this session. Continue when you are ready for voice capture.
+                Your questionnaire signal is complete. Continue to the required 20-second voice sample for multimodal fusion.
               </p>
               <Button onClick={() => onComplete(answers)} size="lg" className="premium-button mt-7 px-7">
                 Continue to voice test

@@ -19,14 +19,14 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 
 const formats: { icon: LucideIcon; title: string; text: string }[] = [
-  { icon: ClipboardList, title: "Questionnaire", text: "Answer guided mental wellness questions in a calm focused flow." },
-  { icon: Mic, title: "Voice", text: "Record a short voice sample when you are ready for the multimodal step." },
-  { icon: Video, title: "Video", text: "Capture a short well-lit video clip for future emotion analysis." },
+  { icon: ClipboardList, title: "Questionnaire", text: "Answer every PHQ-style screening question before moving forward." },
+  { icon: Mic, title: "Voice", text: "Record a clear 20-second English or Urdu voice response." },
+  { icon: Video, title: "Video", text: "Record a 20-second camera response with audio and visible face." },
 ];
 
 const tips = [
   "Find a quiet, well-lit space.",
-  "Answer honestly; there are no wrong answers.",
+  "Speak about mood, sleep, energy, stress, and motivation.",
   "This is a wellness screening, not a medical diagnosis.",
 ];
 
@@ -44,7 +44,7 @@ export default function Instructions({ onStart }: { onStart: () => void }) {
     }
 
     const utterance = new SpeechSynthesisUtterance(
-      "Welcome to your MindSense wellness check. This assessment includes questionnaire, voice, and video steps. Please sit in a quiet, well lit place and answer honestly.",
+      "Welcome to your MindSense wellness check. This assessment requires questionnaire, voice, and video inputs. Please sit in a quiet, well lit place and answer honestly.",
     );
     utterance.rate = 0.95;
     utterance.pitch = 1;
@@ -69,7 +69,7 @@ export default function Instructions({ onStart }: { onStart: () => void }) {
               Prepare for a focused MindSense check-in.
             </h2>
             <p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground md:text-base">
-              The flow collects questionnaire answers and media readiness signals so your report can become more complete when the AI models are connected.
+              The flow collects required questionnaire, voice, and video signals, then fuses them into a transparent wellness screening report.
             </p>
           </div>
 
@@ -136,7 +136,7 @@ export default function Instructions({ onStart }: { onStart: () => void }) {
           <label className="mt-5 flex cursor-pointer items-start gap-3 rounded-2xl border border-white/10 bg-white/[0.04] p-4">
             <Checkbox checked={agreed} onCheckedChange={(value) => setAgreed(Boolean(value))} className="mt-0.5" />
             <span className="text-sm leading-6">
-              I consent to saving my questionnaire and media responses for this MindSense wellness assessment.
+              I consent to saving my questionnaire, audio, and video responses for this MindSense wellness screening assessment.
             </span>
           </label>
           <div className="mt-5 flex justify-end">

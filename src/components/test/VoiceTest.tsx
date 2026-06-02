@@ -1,29 +1,30 @@
 import { useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
-import { CheckCircle2, Mic, RefreshCw, ShieldCheck, Square, Upload } from "lucide-react";
+import { CheckCircle2, Loader2, Mic, PlayCircle, RefreshCw, ShieldCheck, Square, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { AUDIO_SECONDS, evaluateAudioQuality, type AudioSignalMetrics } from "@/lib/depressionAnalysis";
 
-const DURATION = 10;
-
-export default function VoiceTest({ onComplete }: { onComplete: (path: string) => void }) {
+export default function VoiceTest({ onComplete }: { onComplete: (path: string, metrics: AudioSignalMetrics) => void }) {
   const { user } = useAuth();
   const [state, setState] = useState<"idle" | "recording" | "review" | "uploading" | "done">("idle");
-  const [count, setCount] = useState(DURATION);
+  const [count, setCount] = useState(AUDIO_SECONDS);
   const [bars, setBars] = useState<number[]>(Array(28).fill(8));
   const [blob, setBlob] = useState<Blob | null>(null);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [avgVolume, setAvgVolume] = useState(0);
+  const [metrics, setMetrics] = useState<AudioSignalMetrics | null>(null);
 
   const recRef = useRef<MediaRecorder | null>(null);
+  const audioReviewRef = useRef<HTMLAudioElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const audioCtxRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const rafRef = useRef<number | null>(null);
   const volumesRef = useRef<number[]>([]);
+  const startedAtRef = useRef<number | null>(null);
 
   const cleanup = () => {
     streamRef.current?.getTracks().forEach((track) => track.stop());
@@ -35,6 +36,25 @@ export default function VoiceTest({ onComplete }: { onComplete: (path: string) =
 
   const start = async () => {
     setError(null);
+    setMetrics(null);
+    if (!window.isSecureContext) {
+      setError("Microphone access needs a secure page. Open MindSense on localhost or HTTPS, then try again.");
+      setState("idle");
+      return;
+    }
+
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setError("Microphone is not available in this browser. Please use Chrome or Edge and try again.");
+      setState("idle");
+      return;
+    }
+
+    if (typeof MediaRecorder === "undefined") {
+      setError("Audio recording is not supported in this browser. Please use Chrome or Edge and try again.");
+      setState("idle");
+      return;
+    }
+
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       streamRef.current = stream;
@@ -57,22 +77,39 @@ export default function VoiceTest({ onComplete }: { onComplete: (path: string) =
       };
       tick();
 
-      const recorder = new MediaRecorder(stream);
+      const recorder = new MediaRecorder(stream, { audioBitsPerSecond: 64_000 });
       recRef.current = recorder;
       const chunks: Blob[] = [];
       recorder.ondataavailable = (event) => chunks.push(event.data);
       recorder.onstop = () => {
         const recordedBlob = new Blob(chunks, { type: "audio/webm" });
         setBlob(recordedBlob);
-        setAudioUrl(URL.createObjectURL(recordedBlob));
-        const avg = volumesRef.current.reduce((sum, value) => sum + value, 0) / (volumesRef.current.length || 1);
-        setAvgVolume(avg);
+        setAudioUrl((current) => {
+          if (current) URL.revokeObjectURL(current);
+          return URL.createObjectURL(recordedBlob);
+        });
+        const samples = volumesRef.current;
+        const averageVolume = samples.reduce((sum, value) => sum + value, 0) / (samples.length || 1);
+        const peakVolume = samples.length ? Math.max(...samples) : 0;
+        const activeFrames = samples.filter((value) => value > 9).length;
+        const durationSeconds = startedAtRef.current ? (Date.now() - startedAtRef.current) / 1000 : 0;
+        const nextMetrics = evaluateAudioQuality({
+          durationSeconds,
+          averageVolume,
+          peakVolume,
+          voiceActivityRatio: samples.length ? activeFrames / samples.length : 0,
+        });
+        setMetrics(nextMetrics);
+        if (!nextMetrics.passed) {
+          setError(nextMetrics.issues.join(" "));
+        }
         setState("review");
         cleanup();
       };
       recorder.start();
+      startedAtRef.current = Date.now();
       setState("recording");
-      setCount(DURATION);
+      setCount(AUDIO_SECONDS);
 
       const interval = setInterval(() => {
         setCount((current) => {
@@ -88,8 +125,18 @@ export default function VoiceTest({ onComplete }: { onComplete: (path: string) =
           return current - 1;
         });
       }, 1000);
-    } catch {
-      setError("Microphone permission denied. Please allow microphone access and try again.");
+    } catch (requestError) {
+      const errorName = requestError instanceof DOMException ? requestError.name : "";
+      const message =
+        errorName === "NotAllowedError" || errorName === "SecurityError"
+          ? "Microphone permission is blocked. Click the lock icon in the address bar, allow Microphone, refresh, and try again."
+          : errorName === "NotFoundError" || errorName === "DevicesNotFoundError"
+            ? "No microphone was found. Please connect or enable your microphone and try again."
+            : errorName === "NotReadableError" || errorName === "TrackStartError"
+              ? "Microphone is already in use by another app. Close it and try again."
+              : "Microphone could not start. Please check browser microphone permission and try again.";
+      cleanup();
+      setError(message);
       setState("idle");
     }
   };
@@ -97,14 +144,15 @@ export default function VoiceTest({ onComplete }: { onComplete: (path: string) =
   const retry = () => {
     setBlob(null);
     setAudioUrl(null);
+    setMetrics(null);
     setState("idle");
     setError(null);
   };
 
   const upload = async () => {
     if (!blob || !user) return;
-    if (avgVolume < 5) {
-      setError("We could not hear your voice clearly. Please record again in a quieter, louder setting.");
+    if (!metrics?.passed) {
+      setError(metrics?.issues.join(" ") || "We could not hear your voice clearly. Please record again.");
       return;
     }
 
@@ -119,8 +167,20 @@ export default function VoiceTest({ onComplete }: { onComplete: (path: string) =
       return;
     }
 
-    setState("done");
-    setTimeout(() => onComplete(path), 520);
+    onComplete(path, metrics);
+  };
+
+  const playAudioPreview = async () => {
+    const player = audioReviewRef.current;
+    if (!player) return;
+
+    try {
+      player.currentTime = 0;
+      player.volume = 1;
+      await player.play();
+    } catch {
+      setError("Audio preview could not start. Use the audio controls or record again.");
+    }
   };
 
   return (
@@ -133,9 +193,9 @@ export default function VoiceTest({ onComplete }: { onComplete: (path: string) =
             <Mic className="h-4 w-4" />
             Voice signal capture
           </div>
-          <h2 className="mt-5 text-3xl font-extrabold leading-tight md:text-4xl">Record a calm 10-second voice sample.</h2>
+          <h2 className="mt-5 text-3xl font-extrabold leading-tight md:text-4xl">Record a clear 20-second voice sample.</h2>
           <p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground md:text-base">
-            Speak naturally in English or Urdu about how you feel today. MindSense saves the clip for the assessment record.
+            Speak naturally in English or Urdu about your mood, sleep, energy, stress, motivation, and daily routine.
           </p>
 
           <div className="mt-6 rounded-2xl border border-white/10 bg-white/[0.04] p-4">
@@ -146,7 +206,8 @@ export default function VoiceTest({ onComplete }: { onComplete: (path: string) =
             <div className="mt-3 flex flex-wrap gap-2 text-xs text-muted-foreground">
               <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1">Quiet room</span>
               <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1">Clear voice</span>
-              <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1">10 seconds</span>
+              <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1">20 seconds</span>
+              <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1">English or Urdu</span>
             </div>
           </div>
         </div>
@@ -182,7 +243,30 @@ export default function VoiceTest({ onComplete }: { onComplete: (path: string) =
 
           {state === "recording" && <div className="mb-4 text-3xl font-extrabold text-primary">{count}s</div>}
           {error && <div className="mb-4 rounded-xl border border-rose-400/20 bg-rose-400/10 p-3 text-sm text-rose-200">{error}</div>}
-          {state === "review" && audioUrl && <audio controls src={audioUrl} className="mx-auto mb-4 w-full max-w-sm" />}
+          {state === "review" && audioUrl && (
+            <div className="mx-auto mb-4 max-w-sm space-y-3">
+              <audio
+                key={audioUrl}
+                ref={audioReviewRef}
+                controls
+                preload="metadata"
+                src={audioUrl}
+                onError={() => setError("Audio preview could not be loaded. Please record again.")}
+                className="w-full"
+              />
+              <Button onClick={playAudioPreview} variant="outline" className="w-full rounded-full border-white/10 bg-white/[0.04]">
+                <PlayCircle className="h-4 w-4" />
+                Play voice preview
+              </Button>
+            </div>
+          )}
+          {state === "review" && metrics && (
+            <div className="mb-4 grid grid-cols-3 gap-2 text-center text-xs">
+              <MetricPill label="Duration" value={`${Math.round(metrics.durationSeconds)}s`} ok={metrics.durationSeconds >= 15} />
+              <MetricPill label="Voice" value={`${Math.round(metrics.voiceActivityRatio * 100)}%`} ok={metrics.voiceActivityRatio >= 0.28} />
+              <MetricPill label="Quality" value={`${metrics.qualityScore}%`} ok={metrics.passed} />
+            </div>
+          )}
 
           <div className="flex flex-wrap items-center justify-center gap-3">
             {state === "idle" && (
@@ -203,13 +287,18 @@ export default function VoiceTest({ onComplete }: { onComplete: (path: string) =
                   <RefreshCw className="h-4 w-4" />
                   Record again
                 </Button>
-                <Button onClick={upload} className="premium-button px-8">
+                <Button onClick={upload} disabled={!metrics?.passed} className="premium-button px-8">
                   <Upload className="h-4 w-4" />
-                  Continue to video
+                  Upload voice and continue
                 </Button>
               </>
             )}
-            {state === "uploading" && <div className="text-sm text-muted-foreground">Securely saving your recording...</div>}
+            {state === "uploading" && (
+              <div className="inline-flex items-center gap-2 text-sm text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                Uploading voice sample, then video will open...
+              </div>
+            )}
             {state === "done" && (
               <div className="flex items-center gap-2 font-semibold text-primary">
                 <CheckCircle2 className="h-5 w-5" />
@@ -220,5 +309,14 @@ export default function VoiceTest({ onComplete }: { onComplete: (path: string) =
         </div>
       </div>
     </section>
+  );
+}
+
+function MetricPill({ label, value, ok }: { label: string; value: string; ok: boolean }) {
+  return (
+    <div className={`rounded-xl border px-2 py-2 ${ok ? "border-primary/20 bg-primary/10 text-primary" : "border-rose-300/20 bg-rose-400/10 text-rose-100"}`}>
+      <div className="font-extrabold">{value}</div>
+      <div className="mt-0.5 text-[10px] uppercase tracking-[0.12em] opacity-80">{label}</div>
+    </div>
   );
 }

@@ -12,7 +12,7 @@ const publicNavItems = [
   { to: "/contact", label: "Contact" },
 ];
 
-const Navbar = () => {
+const Navbar = ({ showNavigation = true }: { showNavigation?: boolean }) => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
@@ -40,22 +40,24 @@ const Navbar = () => {
           </div>
         </Link>
 
-        <div className="hidden items-center gap-1 rounded-full border border-white/10 bg-white/[0.04] p-1 md:flex">
-          {navItems.map((item) => (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              end
-              className={({ isActive }) =>
-                `rounded-full px-4 py-2 text-sm font-medium transition ${
-                  isActive ? "bg-white/10 text-foreground shadow-sm" : "text-muted-foreground hover:bg-white/[0.06] hover:text-foreground"
-                }`
-              }
-            >
-              {item.label}
-            </NavLink>
-          ))}
-        </div>
+        {showNavigation && (
+          <div className="hidden items-center gap-1 rounded-full border border-white/10 bg-white/[0.04] p-1 md:flex">
+            {navItems.map((item) => (
+              <NavLink
+                key={item.to}
+                to={item.to}
+                end
+                className={({ isActive }) =>
+                  `rounded-full px-4 py-2 text-sm font-medium transition ${
+                    isActive ? "bg-white/10 text-foreground shadow-sm" : "text-muted-foreground hover:bg-white/[0.06] hover:text-foreground"
+                  }`
+                }
+              >
+                {item.label}
+              </NavLink>
+            ))}
+          </div>
+        )}
 
         <div className="hidden items-center gap-2 md:flex">
           {user ? (
@@ -122,23 +124,25 @@ const Navbar = () => {
                   <X className="h-5 w-5" />
                 </button>
               </div>
-              <div className="mt-6 grid gap-2">
-                {navItems.map((item) => (
-                  <NavLink
-                    key={item.to}
-                    to={item.to}
-                    end
-                    onClick={() => setOpen(false)}
-                    className={({ isActive }) =>
-                      `rounded-xl px-4 py-3 text-sm font-medium ${
-                        isActive ? "bg-primary text-primary-foreground" : "bg-white/[0.04] text-muted-foreground"
-                      }`
-                    }
-                  >
-                    {item.label}
-                  </NavLink>
-                ))}
-              </div>
+              {showNavigation && (
+                <div className="mt-6 grid gap-2">
+                  {navItems.map((item) => (
+                    <NavLink
+                      key={item.to}
+                      to={item.to}
+                      end
+                      onClick={() => setOpen(false)}
+                      className={({ isActive }) =>
+                        `rounded-xl px-4 py-3 text-sm font-medium ${
+                          isActive ? "bg-primary text-primary-foreground" : "bg-white/[0.04] text-muted-foreground"
+                        }`
+                      }
+                    >
+                      {item.label}
+                    </NavLink>
+                  ))}
+                </div>
+              )}
               <div className="mt-5 grid grid-cols-2 gap-2">
                 <Button
                   variant="outline"

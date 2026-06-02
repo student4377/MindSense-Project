@@ -55,7 +55,7 @@ const Footer = () => {
             <div>
               <h4 className="mb-4 font-semibold text-foreground">Contact</h4>
               <ul className="space-y-3 text-sm">
-                <li className="flex items-center gap-3"><Mail className="h-4 w-4 text-primary" /> support@mindsense.com</li>
+                <li className="flex items-center gap-3"><Mail className="h-4 w-4 text-primary" /> shahrukh.bsse4377@iiu.edu.pk</li>
                 <li className="flex items-center gap-3"><Phone className="h-4 w-4 text-primary" /> +92 308-8540903</li>
                 <li className="flex items-start gap-3"><MapPin className="mt-0.5 h-4 w-4 text-primary" /> Islamabad, Pakistan</li>
                 <li className="flex items-start gap-3"><MapPin className="mt-0.5 h-4 w-4 text-primary" /> International Islamic University Islamabad</li>

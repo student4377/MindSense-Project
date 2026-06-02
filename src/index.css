@@ -6,46 +6,50 @@
 
 @layer base {
   :root {
-    --background: 222 42% 7%;
-    --foreground: 214 45% 96%;
+    --background: 210 44% 96%;
+    --foreground: 222 47% 12%;
 
-    --card: 222 38% 10%;
-    --card-foreground: 214 45% 96%;
+    --card: 0 0% 100%;
+    --card-foreground: 222 47% 12%;
 
-    --popover: 222 38% 10%;
-    --popover-foreground: 214 45% 96%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 47% 12%;
 
-    --primary: 174 80% 52%;
-    --primary-foreground: 222 42% 7%;
-    --primary-glow: 198 92% 62%;
+    --primary: 180 82% 34%;
+    --primary-foreground: 0 0% 100%;
+    --primary-glow: 204 88% 55%;
 
-    --secondary: 224 34% 15%;
-    --secondary-foreground: 214 45% 96%;
+    --secondary: 204 44% 91%;
+    --secondary-foreground: 222 47% 12%;
 
-    --muted: 224 30% 14%;
-    --muted-foreground: 218 18% 68%;
+    --muted: 210 32% 91%;
+    --muted-foreground: 218 18% 42%;
 
-    --accent: 259 56% 20%;
-    --accent-foreground: 214 45% 96%;
+    --accent: 184 50% 90%;
+    --accent-foreground: 222 47% 12%;
 
     --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 219 25% 22%;
-    --input: 219 25% 22%;
-    --ring: 174 80% 52%;
+    --border: 215 26% 82%;
+    --input: 215 26% 82%;
+    --ring: 180 82% 34%;
 
     --radius: 1rem;
 
-    --hero-from: 222 42% 7%;
-    --hero-to: 259 56% 16%;
+    --hero-from: 190 62% 94%;
+    --hero-to: 253 78% 96%;
 
     --gradient-hero: linear-gradient(135deg, hsl(var(--hero-from)), hsl(var(--hero-to)));
     --gradient-primary: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--primary-glow)));
-    --gradient-premium: linear-gradient(135deg, hsl(174 80% 52%), hsl(198 92% 62%) 45%, hsl(263 85% 68%));
-    --shadow-soft: 0 20px 70px -30px hsl(174 80% 52% / 0.45);
-    --shadow-card: 0 24px 80px -46px hsl(220 60% 2% / 0.95);
-    --shadow-glow: 0 0 0 1px hsl(174 80% 52% / 0.16), 0 24px 80px -42px hsl(198 92% 62% / 0.65);
+    --gradient-premium: linear-gradient(135deg, hsl(180 82% 34%), hsl(204 88% 55%) 45%, hsl(263 85% 68%));
+    --surface-glass: hsl(0 0% 100% / 0.74);
+    --surface-glass-strong: hsl(0 0% 100% / 0.9);
+    --surface-glass-hover: hsl(0 0% 100% / 0.96);
+    --surface-border: hsl(215 28% 78% / 0.7);
+    --shadow-soft: 0 20px 70px -34px hsl(190 82% 34% / 0.35);
+    --shadow-card: 0 24px 70px -46px hsl(218 40% 30% / 0.55);
+    --shadow-glow: 0 0 0 1px hsl(180 82% 34% / 0.13), 0 24px 80px -44px hsl(204 88% 55% / 0.45);
   }
 
   .dark {
@@ -71,6 +75,13 @@
     --ring: 174 65% 50%;
     --hero-from: 174 50% 12%;
     --hero-to: 200 50% 14%;
+    --surface-glass: hsl(0 0% 100% / 0.06);
+    --surface-glass-strong: hsl(215 30% 10% / 0.96);
+    --surface-glass-hover: hsl(0 0% 100% / 0.085);
+    --surface-border: hsl(0 0% 100% / 0.1);
+    --shadow-soft: 0 20px 70px -30px hsl(174 80% 52% / 0.45);
+    --shadow-card: 0 24px 80px -46px hsl(220 60% 2% / 0.95);
+    --shadow-glow: 0 0 0 1px hsl(174 80% 52% / 0.16), 0 24px 80px -42px hsl(198 92% 62% / 0.65);
   }
 }
 
@@ -84,6 +95,12 @@
     font-family: 'Inter', system-ui, sans-serif;
     min-height: 100vh;
     text-rendering: optimizeLegibility;
+    background:
+      radial-gradient(circle at 18% 6%, hsl(180 82% 34% / 0.12), transparent 32rem),
+      radial-gradient(circle at 88% 2%, hsl(263 85% 68% / 0.12), transparent 28rem),
+      linear-gradient(120deg, hsl(210 44% 96%) 0%, hsl(205 50% 94%) 46%, hsl(248 62% 97%) 100%);
+  }
+  html.dark body {
     background:
       linear-gradient(120deg, hsl(222 42% 7%) 0%, hsl(224 46% 8%) 42%, hsl(259 54% 10%) 100%);
   }
@@ -100,6 +117,13 @@
   .premium-page {
     @apply min-h-screen bg-background text-foreground;
     background:
+      radial-gradient(circle at 14% 6%, hsl(180 82% 34% / 0.12), transparent 28rem),
+      radial-gradient(circle at 88% 0%, hsl(263 85% 68% / 0.14), transparent 26rem),
+      linear-gradient(180deg, hsl(210 44% 96%) 0%, hsl(205 50% 94%) 46%, hsl(210 44% 96%) 100%);
+  }
+
+  .dark .premium-page {
+    background:
       linear-gradient(180deg, hsl(222 42% 7%) 0%, hsl(225 44% 8%) 46%, hsl(222 42% 7%) 100%);
   }
 
@@ -112,15 +136,26 @@
   }
 
   .glass-panel {
-    @apply border border-white/10 bg-white/[0.06] shadow-[var(--shadow-card)] backdrop-blur-2xl;
+    border: 1px solid var(--surface-border);
+    background: var(--surface-glass);
+    box-shadow: var(--shadow-card);
+    backdrop-filter: blur(24px);
   }
 
   .premium-card {
-    @apply rounded-2xl border border-white/10 bg-white/[0.055] shadow-[var(--shadow-card)] backdrop-blur-xl transition duration-300;
+    @apply rounded-2xl transition duration-300;
+    border: 1px solid var(--surface-border);
+    background: var(--surface-glass);
+    box-shadow: var(--shadow-card);
+    backdrop-filter: blur(18px);
   }
 
   .premium-card-hover {
-    @apply hover:-translate-y-1 hover:border-primary/35 hover:bg-white/[0.08] hover:shadow-[var(--shadow-glow)];
+    @apply hover:-translate-y-1 hover:border-primary/35 hover:shadow-[var(--shadow-glow)];
+  }
+
+  .premium-card-hover:hover {
+    background: var(--surface-glass-hover);
   }
 
   .gradient-text {
@@ -287,6 +322,119 @@
   .text-amber-700,
   .text-amber-900 {
     color: hsl(38 96% 72%) !important;
+  }
+
+  html:not(.dark) .border-white\/10,
+  html:not(.dark) .border-white\/15 {
+    border-color: hsl(215 28% 78% / 0.68) !important;
+  }
+
+  html:not(.dark) .bg-white\/\[0\.03\],
+  html:not(.dark) .bg-white\/\[0\.04\],
+  html:not(.dark) .bg-white\/\[0\.05\],
+  html:not(.dark) .bg-white\/\[0\.055\],
+  html:not(.dark) .bg-white\/\[0\.06\] {
+    background-color: hsl(0 0% 100% / 0.72) !important;
+  }
+
+  html:not(.dark) .hover\:bg-white\/\[0\.06\]:hover,
+  html:not(.dark) .hover\:bg-white\/\[0\.08\]:hover,
+  html:not(.dark) .hover\:bg-white\/\[0\.1\]:hover {
+    background-color: hsl(0 0% 100% / 0.92) !important;
+  }
+
+}
+
+@media print {
+  @page {
+    size: A4;
+    margin: 12mm;
+  }
+
+  html,
+  body {
+    width: auto !important;
+    min-height: auto !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: white !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  body {
+    background: white !important;
+  }
+
+  body * {
+    visibility: hidden !important;
+  }
+
+  .wellness-report-print,
+  .wellness-report-print * {
+    visibility: visible !important;
+  }
+
+  .wellness-report-print {
+    display: block !important;
+    position: static !important;
+    width: auto !important;
+    min-height: auto !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    color: #020617 !important;
+    background: white !important;
+  }
+
+  .wellness-report-print .report-print-page {
+    display: block !important;
+    min-height: 250mm !important;
+    box-sizing: border-box !important;
+    padding: 0 !important;
+    background: white !important;
+    overflow: visible !important;
+  }
+
+  .wellness-report-print .report-print-page:not(:first-child) {
+    break-before: page !important;
+    page-break-before: always !important;
+  }
+
+  .wellness-report-print .report-print-page:not(:last-child) {
+    break-after: page !important;
+    page-break-after: always !important;
+  }
+
+  .wellness-report-print .report-print-page,
+  .wellness-report-print .report-print-section,
+  .wellness-report-print .report-print-modalities,
+  .wellness-report-print .report-print-card {
+    break-inside: avoid-page !important;
+    page-break-inside: avoid !important;
+  }
+
+  .wellness-report-print .report-print-modalities {
+    display: grid !important;
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    gap: 12px !important;
+  }
+
+  .wellness-report-print .report-print-card {
+    break-inside: avoid-page !important;
+    page-break-inside: avoid !important;
+    min-height: 0 !important;
+  }
+
+  .wellness-report-print .report-print-footer {
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+  }
+
+  .report-actions,
+  .wellness-report-screen {
+    display: none !important;
   }
 }
 

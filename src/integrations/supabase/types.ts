@@ -29,6 +29,81 @@ export type Database = {
         }
         Relationships: []
       }
+      admin_ai_settings: {
+        Row: {
+          analysis_sensitivity: string
+          audio_weight: number
+          confidence_threshold: number
+          high_risk_threshold: number
+          id: string
+          moderation_enabled: boolean
+          text_weight: number
+          updated_at: string
+          updated_by: string | null
+          video_weight: number
+          watch_threshold: number
+        }
+        Insert: {
+          analysis_sensitivity?: string
+          audio_weight?: number
+          confidence_threshold?: number
+          high_risk_threshold?: number
+          id?: string
+          moderation_enabled?: boolean
+          text_weight?: number
+          updated_at?: string
+          updated_by?: string | null
+          video_weight?: number
+          watch_threshold?: number
+        }
+        Update: {
+          analysis_sensitivity?: string
+          audio_weight?: number
+          confidence_threshold?: number
+          high_risk_threshold?: number
+          id?: string
+          moderation_enabled?: boolean
+          text_weight?: number
+          updated_at?: string
+          updated_by?: string | null
+          video_weight?: number
+          watch_threshold?: number
+        }
+        Relationships: []
+      }
+      admin_audit_logs: {
+        Row: {
+          action: string
+          admin_id: string
+          created_at: string
+          entity_id: string | null
+          entity_type: string
+          id: string
+          metadata: Json
+          summary: string
+        }
+        Insert: {
+          action: string
+          admin_id: string
+          created_at?: string
+          entity_id?: string | null
+          entity_type: string
+          id?: string
+          metadata?: Json
+          summary: string
+        }
+        Update: {
+          action?: string
+          admin_id?: string
+          created_at?: string
+          entity_id?: string | null
+          entity_type?: string
+          id?: string
+          metadata?: Json
+          summary?: string
+        }
+        Relationships: []
+      }
       contacts: {
         Row: {
           created_at: string
@@ -104,6 +179,60 @@ export type Database = {
         }
         Relationships: []
       }
+      admin_user_review_statuses: {
+        Row: {
+          admin_note: string | null
+          priority: string
+          review_status: string
+          updated_at: string
+          updated_by: string | null
+          user_id: string
+        }
+        Insert: {
+          admin_note?: string | null
+          priority?: string
+          review_status?: string
+          updated_at?: string
+          updated_by?: string | null
+          user_id: string
+        }
+        Update: {
+          admin_note?: string | null
+          priority?: string
+          review_status?: string
+          updated_at?: string
+          updated_by?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      admin_risk_alert_reviews: {
+        Row: {
+          admin_note: string | null
+          alert_status: string
+          assessment_id: string
+          priority: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          admin_note?: string | null
+          alert_status?: string
+          assessment_id: string
+          priority?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          admin_note?: string | null
+          alert_status?: string
+          assessment_id?: string
+          priority?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
       mood_entries: {
         Row: {
           created_at: string
@@ -137,6 +266,69 @@ export type Database = {
           sleep_quality?: number | null
           tags?: string[] | null
           user_id?: string
+        }
+        Relationships: []
+      }
+      mental_health_professionals: {
+        Row: {
+          address: string | null
+          city: string
+          created_at: string
+          created_by: string | null
+          featured: boolean
+          id: string
+          is_published: boolean
+          location: string
+          map_url: string | null
+          name: string
+          phone: string | null
+          role: string
+          slug: string
+          source_label: string | null
+          source_url: string | null
+          specialization: string
+          updated_at: string
+          verification_status: string
+        }
+        Insert: {
+          address?: string | null
+          city: string
+          created_at?: string
+          created_by?: string | null
+          featured?: boolean
+          id?: string
+          is_published?: boolean
+          location: string
+          map_url?: string | null
+          name: string
+          phone?: string | null
+          role: string
+          slug: string
+          source_label?: string | null
+          source_url?: string | null
+          specialization: string
+          updated_at?: string
+          verification_status?: string
+        }
+        Update: {
+          address?: string | null
+          city?: string
+          created_at?: string
+          created_by?: string | null
+          featured?: boolean
+          id?: string
+          is_published?: boolean
+          location?: string
+          map_url?: string | null
+          name?: string
+          phone?: string | null
+          role?: string
+          slug?: string
+          source_label?: string | null
+          source_url?: string | null
+          specialization?: string
+          updated_at?: string
+          verification_status?: string
         }
         Relationships: []
       }
@@ -351,6 +543,54 @@ export type Database = {
         }
         Relationships: []
       }
+      support_requests: {
+        Row: {
+          admin_reply: string | null
+          assigned_to: string | null
+          created_at: string
+          id: string
+          message: string
+          request_type: string
+          resolved_at: string | null
+          status: string
+          subject: string
+          updated_at: string
+          updated_by: string | null
+          urgency: string
+          user_id: string
+        }
+        Insert: {
+          admin_reply?: string | null
+          assigned_to?: string | null
+          created_at?: string
+          id?: string
+          message: string
+          request_type?: string
+          resolved_at?: string | null
+          status?: string
+          subject: string
+          updated_at?: string
+          updated_by?: string | null
+          urgency?: string
+          user_id: string
+        }
+        Update: {
+          admin_reply?: string | null
+          assigned_to?: string | null
+          created_at?: string
+          id?: string
+          message?: string
+          request_type?: string
+          resolved_at?: string | null
+          status?: string
+          subject?: string
+          updated_at?: string
+          updated_by?: string | null
+          urgency?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       support_recommendation_events: {
         Row: {
           created_at: string
@@ -473,6 +713,159 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      admin_assessment_wellness_score: {
+        Args: { _answers: Json }
+        Returns: number
+      }
+      get_admin_ai_settings: {
+        Args: Record<PropertyKey, never>
+        Returns: Json
+      }
+      get_admin_audit_logs: {
+        Args: { _entity_type?: string; _limit?: number }
+        Returns: {
+          action: string
+          admin_email: string | null
+          admin_id: string
+          admin_name: string | null
+          created_at: string
+          entity_id: string | null
+          entity_type: string
+          log_id: string
+          metadata: Json
+          summary: string
+        }[]
+      }
+      get_admin_assessment_analytics: {
+        Args: Record<PropertyKey, never>
+        Returns: Json
+      }
+      get_admin_overview: {
+        Args: Record<PropertyKey, never>
+        Returns: Json
+      }
+      get_admin_risk_alerts: {
+        Args: { _limit?: number; _status?: string }
+        Returns: {
+          admin_note: string | null
+          alert_status: string
+          answer_count: number
+          assessment_id: string
+          created_at: string
+          email: string | null
+          name: string | null
+          priority: string
+          risk_level: string
+          updated_at: string | null
+          user_id: string
+          video_captured: boolean
+          voice_captured: boolean
+          wellness_score: number
+        }[]
+      }
+      get_admin_mood_analytics: {
+        Args: Record<PropertyKey, never>
+        Returns: Json
+      }
+      get_admin_support_request_stats: {
+        Args: Record<PropertyKey, never>
+        Returns: Json
+      }
+      get_admin_support_requests: {
+        Args: { _limit?: number; _search?: string; _status?: string }
+        Returns: {
+          admin_reply: string | null
+          assigned_to: string | null
+          completed_tests: number
+          created_at: string
+          email: string | null
+          latest_mood: number | null
+          latest_wellness_score: number | null
+          message: string
+          mood_entries: number
+          name: string | null
+          request_id: string
+          request_type: string
+          status: string
+          subject: string
+          updated_at: string
+          urgency: string
+          user_id: string
+        }[]
+      }
+      get_admin_user_detail: {
+        Args: { _user_id: string }
+        Returns: Json
+      }
+      get_admin_user_summaries: {
+        Args: { _limit?: number; _search?: string }
+        Returns: {
+          account_status: string
+          completed_tests: number
+          email: string | null
+          joined_at: string
+          latest_activity: string | null
+          mood_entries: number
+          name: string | null
+          risk_level: string
+          support_sessions: number
+          user_id: string
+        }[]
+      }
+      get_current_user_access_status: {
+        Args: Record<PropertyKey, never>
+        Returns: Json
+      }
+      set_admin_user_review_status: {
+        Args: {
+          _admin_note?: string | null
+          _priority?: string
+          _review_status: string
+          _user_id: string
+        }
+        Returns: Json
+      }
+      set_admin_ai_settings: {
+        Args: {
+          _analysis_sensitivity?: string
+          _audio_weight: number
+          _confidence_threshold: number
+          _high_risk_threshold: number
+          _moderation_enabled?: boolean
+          _text_weight: number
+          _video_weight: number
+          _watch_threshold: number
+        }
+        Returns: Json
+      }
+      record_admin_audit_log: {
+        Args: {
+          _action: string
+          _entity_id?: string | null
+          _entity_type: string
+          _metadata?: Json
+          _summary: string
+        }
+        Returns: Json
+      }
+      set_admin_risk_alert_status: {
+        Args: {
+          _admin_note?: string | null
+          _alert_status: string
+          _assessment_id: string
+          _priority?: string
+        }
+        Returns: Json
+      }
+      set_admin_support_request_status: {
+        Args: {
+          _admin_reply?: string | null
+          _request_id: string
+          _status: string
+          _urgency?: string
+        }
+        Returns: Json
+      }
       is_admin: { Args: { _uid: string }; Returns: boolean }
     }
     Enums: {

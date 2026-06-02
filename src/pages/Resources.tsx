@@ -1,25 +1,17 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { AnimatePresence, motion } from "framer-motion";
+import { Link } from "react-router-dom";
 import {
   AlertCircle,
-  Bookmark,
-  BookmarkCheck,
   BookOpen,
-  CheckCircle2,
   ExternalLink,
   Filter,
   Headphones,
-  Loader2,
   MessageCircle,
-  Pencil,
   Play,
-  Plus,
   RefreshCw,
-  Search,
-  ShieldCheck,
   Sparkles,
   Star,
-  Trash2,
   Video,
   X,
   type LucideIcon,
@@ -28,27 +20,16 @@ import DashboardLayout from "@/components/DashboardLayout";
 import WellnessAssistant, { type WellnessAssistantResource } from "@/components/WellnessAssistant";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
-import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
-import { CURATED_RESOURCE_CANDIDATES, type CuratedResourceCandidate } from "@/data/curatedResourceDiscovery";
 import {
   RESOURCE_CATEGORIES,
   RESOURCE_MOOD_CATEGORIES,
-  deleteResource,
-  detectSourcePlatform,
-  fetchResourceMetadata,
   getEmbedUrl,
-  listBookmarks,
   listProgress,
   listResources,
-  normalizeResource,
-  saveResource,
   upsertProgress,
   type Resource,
   type ResourceCategory,
@@ -56,24 +37,9 @@ import {
 } from "@/lib/resourceService";
 import { buildResourceContext, recommendResources } from "@/lib/resourceRecommendations";
 
-type BookmarkRow = Tables<"resource_bookmarks">;
 type ProgressRow = Tables<"resource_progress">;
 type MoodEntry = Tables<"mood_entries">;
 type DepressionTest = Tables<"depression_tests">;
-
-type ResourceFormState = {
-  title: string;
-  description: string;
-  type: ResourceCategory;
-  mood_category: ResourceMoodCategory;
-  external_url: string;
-  thumbnail_url: string;
-  tags: string;
-  estimated_duration: string;
-  source_platform: string;
-  featured: boolean;
-  is_published: boolean;
-};
 
 const categoryIcon: Record<ResourceCategory, LucideIcon> = {
   article: BookOpen,
@@ -102,50 +68,19 @@ const greeting = () => {
 
 const isExternalUrl = (url?: string | null) => Boolean(url && /^https?:\/\//i.test(url));
 
-const fallbackResources: Resource[] = CURATED_RESOURCE_CANDIDATES.map((candidate, index) =>
-  normalizeResource({
-    id: `fallback-${index}`,
-    title: candidate.title,
-    description: candidate.description,
-    type: candidate.category,
-    category: candidate.category,
-    topic: candidate.mood_category,
-    mood_category: candidate.mood_category,
-    thumbnail_url: candidate.thumbnail_url,
-    content_url: candidate.external_url,
-    external_url: candidate.external_url,
-    content_body: null,
-    duration: candidate.estimated_duration,
-    estimated_duration: candidate.estimated_duration,
-    source_platform: candidate.source_platform,
-    tags: candidate.tags,
-    featured: candidate.featured ?? false,
-    is_published: true,
-    created_by: null,
-    created_at: new Date(0).toISOString(),
-    updated_at: new Date(0).toISOString(),
-  }),
-);
-
 const Resources = () => {
   const { user } = useAuth();
   const [name, setName] = useState("");
-  const [isAdmin, setIsAdmin] = useState(false);
   const [resources, setResources] = useState<Resource[]>([]);
-  const [bookmarks, setBookmarks] = useState<Set<string>>(new Set());
   const [progress, setProgress] = useState<Record<string, { progress: number; last: string }>>({});
   const [moods, setMoods] = useState<MoodEntry[]>([]);
   const [latestTest, setLatestTest] = useState<DepressionTest | null>(null);
   const [category, setCategory] = useState<"all" | ResourceCategory>("all");
   const [moodFilter, setMoodFilter] = useState<"all" | ResourceMoodCategory>("all");
   const [tagFilter, setTagFilter] = useState("all");
-  const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
-  const [resourceSchemaReady, setResourceSchemaReady] = useState(true);
   const [openResource, setOpenResource] = useState<Resource | null>(null);
-  const [adminOpen, setAdminOpen] = useState(false);
-  const [editing, setEditing] = useState<Resource | null>(null);
   const [chatOpen, setChatOpen] = useState(false);
 
   const loadData = useCallback(async () => {
@@ -153,36 +88,29 @@ const Resources = () => {
     setLoading(true);
     setLoadError("");
 
-    const [{ data: profile }, { data: admin }, moodResult, testResult] = await Promise.all([
+    const [{ data: profile }, moodResult, testResult] = await Promise.all([
       supabase.from("profiles").select("name").eq("id", user.id).maybeSingle(),
-      supabase.from("admins").select("user_id").eq("user_id", user.id).maybeSingle(),
       supabase.from("mood_entries").select("*").eq("user_id", user.id).order("entry_date", { ascending: false }).limit(14),
       supabase.from("depression_tests").select("*").eq("user_id", user.id).eq("status", "completed").order("created_at", { ascending: false }).limit(1).maybeSingle(),
     ]);
 
-    const adminMode = Boolean(admin);
-    const [resourceResult, bookmarkResult, progressResult] = await Promise.all([
-      listResources(adminMode),
-      listBookmarks(user.id),
+    const [resourceResult, progressResult] = await Promise.all([
+      listResources(false),
       listProgress(user.id),
     ]);
 
     if (resourceResult.error) {
       setLoadError(resourceResult.error.message);
-      setResources(fallbackResources);
+      setResources([]);
     } else {
-      setResources(resourceResult.data.length ? resourceResult.data : fallbackResources);
+      setResources(resourceResult.data);
     }
-    setResourceSchemaReady(!resourceResult.error && !resourceResult.compatibilityMode);
 
-    if (bookmarkResult.error) toast({ title: "Could not load bookmarks", description: bookmarkResult.error.message, variant: "destructive" });
     if (progressResult.error) toast({ title: "Could not load reading progress", description: progressResult.error.message, variant: "destructive" });
     if (moodResult.error) toast({ title: "Could not load mood signal", description: moodResult.error.message, variant: "destructive" });
     if (testResult.error) toast({ title: "Could not load assessment signal", description: testResult.error.message, variant: "destructive" });
 
     setName(profile?.name || user.email?.split("@")[0] || "Friend");
-    setIsAdmin(adminMode);
-    setBookmarks(new Set(((bookmarkResult.data as BookmarkRow[] | null) || []).map((bookmark) => bookmark.resource_id)));
 
     const pmap: Record<string, { progress: number; last: string }> = {};
     ((progressResult.data as ProgressRow[] | null) || []).forEach((item) => {
@@ -199,23 +127,19 @@ const Resources = () => {
   }, [loadData]);
 
   const recommendationContext = useMemo(() => buildResourceContext(moods, latestTest), [latestTest, moods]);
-  const recommended = useMemo(() => recommendResources(resources, recommendationContext, bookmarks), [bookmarks, recommendationContext, resources]);
+  const recommended = useMemo(() => recommendResources(resources, recommendationContext), [recommendationContext, resources]);
   const featured = useMemo(() => resources.filter((resource) => resource.is_published && resource.featured).slice(0, 6), [resources]);
   const allTags = useMemo(() => Array.from(new Set(resources.flatMap((resource) => resource.tags || []))).sort(), [resources]);
 
   const filtered = useMemo(() => {
-    const query = search.trim().toLowerCase();
     return resources.filter((resource) => {
-      if (!isAdmin && !resource.is_published) return false;
+      if (!resource.is_published) return false;
       if (category !== "all" && resource.type !== category) return false;
       if (moodFilter !== "all" && resource.mood_category !== moodFilter) return false;
       if (tagFilter !== "all" && !resource.tags?.some((tag) => tag.toLowerCase() === tagFilter.toLowerCase())) return false;
-      if (!query) return true;
-      return `${resource.title} ${resource.description ?? ""} ${resource.mood_category ?? ""} ${(resource.tags || []).join(" ")}`
-        .toLowerCase()
-        .includes(query);
+      return true;
     });
-  }, [category, isAdmin, moodFilter, resources, search, tagFilter]);
+  }, [category, moodFilter, resources, tagFilter]);
 
   const counts = useMemo(
     () => ({
@@ -233,35 +157,10 @@ const Resources = () => {
     .filter((entry): entry is { resource: Resource; item: { progress: number; last: string } } => Boolean(entry.resource));
 
   const refreshResources = async () => {
-    const { data, error, compatibilityMode } = await listResources(isAdmin);
+    const { data, error } = await listResources(false);
     if (error) toast({ title: "Refresh failed", description: error.message, variant: "destructive" });
     else {
-      setResources(data.length ? data : fallbackResources);
-      setResourceSchemaReady(!compatibilityMode);
-    }
-  };
-
-  const toggleBookmark = async (id: string) => {
-    if (!user) return;
-    if (id.startsWith("fallback-")) {
-      toast({ title: "Curated preview", description: "Save this resource after an admin imports it." });
-      return;
-    }
-
-    const hadBookmark = bookmarks.has(id);
-    const next = new Set(bookmarks);
-    if (hadBookmark) next.delete(id);
-    else next.add(id);
-    setBookmarks(next);
-
-    const { error } = hadBookmark
-      ? await supabase.from("resource_bookmarks").delete().eq("user_id", user.id).eq("resource_id", id)
-      : await supabase.from("resource_bookmarks").insert({ user_id: user.id, resource_id: id });
-
-    if (error) {
-      const rollback = new Set(bookmarks);
-      setBookmarks(rollback);
-      toast({ title: "Bookmark failed", description: error.message, variant: "destructive" });
+      setResources(data);
     }
   };
 
@@ -286,37 +185,49 @@ const Resources = () => {
           name={name}
           context={recommendationContext}
           loading={loading}
-          search={search}
-          onSearch={setSearch}
           counts={counts}
         />
 
         {loadError && (
           <section className="rounded-[1.5rem] border border-amber-300/25 bg-amber-300/10 p-4 text-sm text-amber-100">
-            Resource database could not be loaded, so MindSense is showing curated preview content. {loadError}
-          </section>
-        )}
-
-        {isAdmin && !resourceSchemaReady && (
-          <section className="rounded-[1.5rem] border border-cyan-300/20 bg-cyan-300/10 p-4 text-sm text-cyan-50">
-            Resources are running in compatibility mode. Apply the premium resources migration to enable drafts,
-            publish controls, tags, mood categories, and admin discovery imports.
+            Resource database could not be loaded. No preview resources are shown until the database responds. {loadError}
           </section>
         )}
 
         <ResourceCollection
           title="Recommended For You"
-          subtitle={`Based on ${recommendationContext.reasons.join(", ")}.`}
+          subtitle={
+            recommendationContext.hasSignals
+              ? `Based on ${recommendationContext.reasons.join(", ")}.`
+              : "Personalized resources will appear after your first mood entry or completed depression test."
+          }
           resources={recommended}
-          bookmarks={bookmarks}
           progress={progress}
           onOpen={openAndTrack}
-          onBookmark={toggleBookmark}
           variant="recommended"
+          emptyDescription={
+            !recommendationContext.hasSignals
+              ? "MindSense needs a real wellness signal first. Add today's mood or complete the depression test, then this section will show matched articles, videos, and audio."
+              : resources.length === 0
+                ? "No resources have been published yet. Once an admin publishes resources, MindSense will match them with your mood and assessment data."
+                : "No published resource currently matches this wellness signal. Try the full library or check again after more resources are published."
+          }
+          emptyActions={
+            !recommendationContext.hasSignals ? (
+              <div className="mt-4 flex flex-wrap gap-2">
+                <Button asChild className="premium-button">
+                  <Link to="/mood">Add Mood</Link>
+                </Button>
+                <Button asChild variant="outline" className="rounded-full border-white/10 bg-white/[0.04]">
+                  <Link to="/test">Take Depression Test</Link>
+                </Button>
+              </div>
+            ) : undefined
+          }
         />
 
         {featured.length > 0 && (
-          <ResourceCollection title="Featured Resources" subtitle="Admin-curated content highlighted for MindSense users." resources={featured} bookmarks={bookmarks} progress={progress} onOpen={openAndTrack} onBookmark={toggleBookmark} compact />
+          <ResourceCollection title="Featured Resources" subtitle="Admin-curated content highlighted for MindSense users." resources={featured} progress={progress} onOpen={openAndTrack} compact />
         )}
 
         <ResourceFilters
@@ -335,83 +246,33 @@ const Resources = () => {
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
             <div>
               <h2 className="text-2xl font-extrabold">Resource Library</h2>
-              <p className="mt-1 text-sm text-muted-foreground">Search, filter, save, and open external wellness resources.</p>
+              <p className="mt-1 text-sm text-muted-foreground">Filter and open external wellness resources.</p>
             </div>
             <div className="flex flex-wrap gap-2">
               <Button variant="outline" className="rounded-full border-white/10 bg-white/[0.04]" onClick={refreshResources}>
                 <RefreshCw className="h-4 w-4" />
                 Refresh
               </Button>
-              {isAdmin && resourceSchemaReady && (
-                <Button className="premium-button" onClick={() => { setEditing(null); setAdminOpen(true); }}>
-                  <Plus className="h-4 w-4" />
-                  Add Resource
-                </Button>
-              )}
             </div>
           </div>
 
           {loading ? (
             <ResourceSkeleton />
           ) : filtered.length === 0 ? (
-            <EmptyResources isAdmin={isAdmin && resourceSchemaReady} onAdd={() => { setEditing(null); setAdminOpen(true); }} />
+            <EmptyResources hasPublishedResources={resources.some((resource) => resource.is_published)} />
           ) : (
             <motion.div initial="hidden" animate="show" variants={{ hidden: {}, show: { transition: { staggerChildren: 0.04 } } }} className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
               {filtered.map((resource) => (
                 <ResourceCard
                   key={resource.id}
                   resource={resource}
-                  bookmarked={bookmarks.has(resource.id)}
                   progress={progress[resource.id]?.progress ?? 0}
                   onOpen={() => openAndTrack(resource)}
-                  onBookmark={() => toggleBookmark(resource.id)}
-                  admin={isAdmin && resourceSchemaReady && !resource.id.startsWith("fallback-")}
-                  onEdit={() => { setEditing(resource); setAdminOpen(true); }}
-                  onDelete={async () => {
-                    if (!confirm("Delete this resource?")) return;
-                    const { error } = await deleteResource(resource.id);
-                    if (error) toast({ title: "Delete failed", description: error.message, variant: "destructive" });
-                    else {
-                      toast({ title: "Resource deleted" });
-                      refreshResources();
-                    }
-                  }}
                 />
               ))}
             </motion.div>
           )}
         </section>
-
-        {isAdmin && resourceSchemaReady && (
-          <AdminDiscoveryPanel
-            onImport={async (candidate) => {
-              if (!user) return;
-              const { error } = await saveResource({
-                title: candidate.title,
-                description: candidate.description,
-                type: candidate.category,
-                category: candidate.category,
-                mood_category: candidate.mood_category,
-                topic: candidate.mood_category,
-                external_url: candidate.external_url,
-                content_url: candidate.external_url,
-                thumbnail_url: candidate.thumbnail_url,
-                tags: candidate.tags,
-                estimated_duration: candidate.estimated_duration,
-                duration: candidate.estimated_duration,
-                source_platform: candidate.source_platform,
-                featured: candidate.featured ?? false,
-                is_published: false,
-                created_by: user.id,
-              });
-              if (error) toast({ title: "Import failed", description: error.message, variant: "destructive" });
-              else {
-                toast({ title: "Imported as draft", description: "Review and publish it from the admin manager." });
-                refreshResources();
-              }
-            }}
-          />
-        )}
 
         <CrisisPanel />
       </div>
@@ -426,17 +287,6 @@ const Resources = () => {
 
       <AnimatePresence>
         {openResource && <ResourceModal resource={openResource} onClose={() => setOpenResource(null)} />}
-        {adminOpen && resourceSchemaReady && (
-          <AdminModal
-            editing={editing}
-            userId={user?.id}
-            onClose={() => setAdminOpen(false)}
-            onSaved={() => {
-              setAdminOpen(false);
-              refreshResources();
-            }}
-          />
-        )}
         <WellnessAssistant
           open={chatOpen}
           onClose={() => setChatOpen(false)}
@@ -455,15 +305,11 @@ function ResourceHero({
   name,
   context,
   loading,
-  search,
-  onSearch,
   counts,
 }: {
   name: string;
   context: ReturnType<typeof buildResourceContext>;
   loading: boolean;
-  search: string;
-  onSearch: (value: string) => void;
   counts: { article: number; video: number; audio: number };
 }) {
   return (
@@ -484,13 +330,11 @@ function ResourceHero({
             Explore articles, videos, and audio from trusted external platforms. MindSense filters them with lightweight rules
             based on your mood, sleep, energy, and assessment signals.
           </p>
-          <div className="relative mt-6 max-w-2xl">
-            <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input value={search} onChange={(event) => onSearch(event.target.value)} placeholder="Search resources, tags, mood states..." className="h-12 rounded-full border-white/10 bg-white/[0.06] pl-11" />
-          </div>
         </div>
         <div className="rounded-[1.5rem] border border-white/10 bg-black/15 p-5">
-          <div className="text-xs font-bold uppercase tracking-[0.16em] text-primary">Current recommendation focus</div>
+          <div className="text-xs font-bold uppercase tracking-[0.16em] text-primary">
+            {context.hasSignals ? "Current recommendation focus" : "Personalization status"}
+          </div>
           <div className="mt-3 text-2xl font-extrabold capitalize">{context.moodLabel}</div>
           <div className="mt-3 space-y-2">
             {context.reasons.map((reason) => (
@@ -643,21 +487,21 @@ function ChipRow<T extends string>({ items, active, label, onSelect }: { items: 
 function ResourceCollection({
   title,
   subtitle,
+  emptyDescription,
+  emptyActions,
   resources,
-  bookmarks,
   progress,
   onOpen,
-  onBookmark,
   compact,
   variant = "default",
 }: {
   title: string;
   subtitle: string;
+  emptyDescription?: string;
+  emptyActions?: ReactNode;
   resources: Resource[];
-  bookmarks: Set<string>;
   progress: Record<string, { progress: number; last: string }>;
   onOpen: (resource: Resource) => void;
-  onBookmark: (id: string) => void;
   compact?: boolean;
   variant?: "default" | "recommended";
 }) {
@@ -669,7 +513,10 @@ function ResourceCollection({
         {isRecommended && <div className="pointer-events-none absolute -right-16 -top-20 h-56 w-56 rounded-full bg-primary/15 blur-3xl" />}
         <div className="relative">
           <h2 className="text-xl font-bold">{title}</h2>
-          <p className="mt-2 text-sm text-muted-foreground">Add or import published resources to populate this section.</p>
+          <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
+            {emptyDescription || "Add or import published resources to populate this section."}
+          </p>
+          {emptyActions}
         </div>
       </section>
     );
@@ -704,7 +551,7 @@ function ResourceCollection({
       </div>
       <div className={`relative grid gap-4 ${compact || isRecommended ? "md:grid-cols-2 xl:grid-cols-3" : "md:grid-cols-2"}`}>
         {resources.map((resource) => (
-          <ResourceCard key={resource.id} resource={resource} bookmarked={bookmarks.has(resource.id)} progress={progress[resource.id]?.progress ?? 0} onOpen={() => onOpen(resource)} onBookmark={() => onBookmark(resource.id)} />
+          <ResourceCard key={resource.id} resource={resource} progress={progress[resource.id]?.progress ?? 0} onOpen={() => onOpen(resource)} />
         ))}
       </div>
     </section>
@@ -713,22 +560,12 @@ function ResourceCollection({
 
 function ResourceCard({
   resource,
-  bookmarked,
   progress,
   onOpen,
-  onBookmark,
-  admin,
-  onEdit,
-  onDelete,
 }: {
   resource: Resource;
-  bookmarked: boolean;
   progress: number;
   onOpen: () => void;
-  onBookmark: () => void;
-  admin?: boolean;
-  onEdit?: () => void;
-  onDelete?: () => void;
 }) {
   const Icon = categoryIcon[resource.type] || BookOpen;
 
@@ -748,17 +585,6 @@ function ResourceCard({
           {resource.featured && <Badge className="bg-amber-400 text-slate-950 hover:bg-amber-400"><Star className="mr-1 h-3 w-3" />Featured</Badge>}
           {!resource.is_published && <Badge variant="outline" className="border-amber-300/40 bg-amber-300/10 text-amber-100">Draft</Badge>}
         </div>
-        <button
-          type="button"
-          onClick={(event) => {
-            event.stopPropagation();
-            onBookmark();
-          }}
-          className="absolute right-3 top-3 z-30 flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-[#07111f]/80 backdrop-blur transition hover:bg-[#07111f]"
-          aria-label="Bookmark resource"
-        >
-          {bookmarked ? <BookmarkCheck className="h-4 w-4 text-primary" /> : <Bookmark className="h-4 w-4" />}
-        </button>
         <div className="pointer-events-none absolute bottom-3 left-3 right-3 z-20 flex items-center justify-between gap-2 text-xs">
           <span className="rounded-full border border-white/10 bg-black/35 px-2.5 py-1 capitalize text-white">{resource.type}</span>
           {resource.estimated_duration && <span className="rounded-full border border-white/10 bg-black/35 px-2.5 py-1 text-white">{resource.estimated_duration}</span>}
@@ -792,12 +618,6 @@ function ResourceCard({
             <Play className="h-3.5 w-3.5" />
             Open
           </Button>
-          {admin && (
-            <>
-              <Button size="icon" variant="outline" className="rounded-full border-white/10 bg-white/[0.04]" onClick={onEdit} aria-label="Edit resource"><Pencil className="h-4 w-4" /></Button>
-              <Button size="icon" variant="outline" className="rounded-full border-white/10 bg-white/[0.04]" onClick={onDelete} aria-label="Delete resource"><Trash2 className="h-4 w-4" /></Button>
-            </>
-          )}
         </div>
       </div>
     </motion.article>
@@ -896,196 +716,6 @@ function ResourceModal({ resource, onClose }: { resource: Resource; onClose: () 
   );
 }
 
-function AdminDiscoveryPanel({ onImport }: { onImport: (candidate: CuratedResourceCandidate) => Promise<void> }) {
-  const [query, setQuery] = useState("");
-  const results = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return CURATED_RESOURCE_CANDIDATES;
-    return CURATED_RESOURCE_CANDIDATES.filter((candidate) =>
-      `${candidate.title} ${candidate.description} ${candidate.category} ${candidate.mood_category} ${candidate.tags.join(" ")}`
-        .toLowerCase()
-        .includes(q),
-    );
-  }, [query]);
-
-  return (
-    <section className="premium-card p-5 md:p-6">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h2 className="text-xl font-bold">Admin Discovery</h2>
-          <p className="mt-1 text-sm text-muted-foreground">Search curated external content, import as draft, then review and publish.</p>
-        </div>
-        <div className="relative w-full max-w-md">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Try anxiety, sleep, focus..." className="rounded-full border-white/10 bg-white/[0.06] pl-9" />
-        </div>
-      </div>
-      <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-        {results.map((candidate) => (
-          <div key={candidate.external_url} className="rounded-2xl border border-white/10 bg-white/[0.04] p-3">
-            <div className="aspect-video overflow-hidden rounded-xl bg-black/20">
-              <img src={candidate.thumbnail_url} alt={candidate.title} className="h-full w-full object-cover" />
-            </div>
-            <div className="mt-3 font-bold leading-snug">{candidate.title}</div>
-            <div className="mt-1 text-xs text-muted-foreground">{candidate.estimated_duration} - {moodLabel(candidate.mood_category)}</div>
-            <Button size="sm" className="premium-button mt-3 w-full" onClick={() => void onImport(candidate)}>
-              Import Draft
-            </Button>
-          </div>
-        ))}
-      </div>
-    </section>
-  );
-}
-
-function AdminModal({ editing, userId, onClose, onSaved }: { editing: Resource | null; userId?: string; onClose: () => void; onSaved: () => void }) {
-  const [form, setForm] = useState<ResourceFormState>({
-    title: editing?.title || "",
-    description: editing?.description || "",
-    type: editing?.type || "article",
-    mood_category: editing?.mood_category || "mindfulness",
-    external_url: editing?.external_url || editing?.content_url || "",
-    thumbnail_url: editing?.thumbnail_url || "",
-    tags: (editing?.tags || []).join(", "),
-    estimated_duration: editing?.estimated_duration || editing?.duration || "",
-    source_platform: editing?.source_platform || "",
-    featured: editing?.featured || false,
-    is_published: editing?.is_published ?? false,
-  });
-  const [extracting, setExtracting] = useState(false);
-
-  const extractMetadata = async () => {
-    if (!form.external_url.trim()) {
-      toast({ title: "URL required", description: "Paste a resource URL first.", variant: "destructive" });
-      return;
-    }
-    setExtracting(true);
-    const meta = await fetchResourceMetadata(form.external_url.trim());
-    setForm((current) => ({
-      ...current,
-      title: current.title || meta.title || "",
-      description: current.description || meta.description || "",
-      thumbnail_url: current.thumbnail_url || meta.thumbnail_url || "",
-      source_platform: meta.source_platform,
-    }));
-    setExtracting(false);
-  };
-
-  const submit = async () => {
-    if (!userId) return;
-    if (!form.title.trim() || !form.external_url.trim()) {
-      toast({ title: "Resource needs title and URL", variant: "destructive" });
-      return;
-    }
-
-    const source = form.source_platform || detectSourcePlatform(form.external_url);
-    const payload = {
-      title: form.title.trim(),
-      description: form.description.trim() || null,
-      type: form.type,
-      category: form.type,
-      mood_category: form.mood_category,
-      topic: form.mood_category,
-      external_url: form.external_url.trim(),
-      content_url: form.external_url.trim(),
-      thumbnail_url: form.thumbnail_url.trim() || null,
-      tags: form.tags.split(",").map((tag) => tag.trim()).filter(Boolean),
-      estimated_duration: form.estimated_duration.trim() || null,
-      duration: form.estimated_duration.trim() || null,
-      source_platform: source,
-      featured: form.featured,
-      is_published: form.is_published,
-      created_by: userId,
-    };
-
-    const { error } = await saveResource(payload, editing?.id);
-    if (error) toast({ title: "Save failed", description: error.message, variant: "destructive" });
-    else {
-      toast({ title: editing ? "Resource updated" : "Resource created" });
-      onSaved();
-    }
-  };
-
-  return (
-    <ModalShell onClose={onClose} wide>
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <h2 className="text-2xl font-extrabold">{editing ? "Edit Resource" : "New Resource"}</h2>
-          <p className="mt-1 text-sm text-muted-foreground">Store external metadata only. Do not upload large media files.</p>
-        </div>
-        <button type="button" onClick={onClose} className="flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/[0.04]"><X className="h-5 w-5" /></button>
-      </div>
-
-      <div className="mt-5 grid gap-4 md:grid-cols-2">
-        <label className="space-y-2 md:col-span-2">
-          <Label>External URL</Label>
-          <div className="flex gap-2">
-            <Input value={form.external_url} onChange={(event) => setForm({ ...form, external_url: event.target.value })} placeholder="YouTube, Spotify, SoundCloud, article URL..." className="border-white/10 bg-background" />
-            <Button variant="outline" className="shrink-0 rounded-full border-white/10 bg-white/[0.04]" onClick={extractMetadata} disabled={extracting}>
-              {extracting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-              Extract
-            </Button>
-          </div>
-        </label>
-        <label className="space-y-2 md:col-span-2">
-          <Label>Title</Label>
-          <Input value={form.title} onChange={(event) => setForm({ ...form, title: event.target.value })} className="border-white/10 bg-background" />
-        </label>
-        <label className="space-y-2 md:col-span-2">
-          <Label>Description</Label>
-          <Textarea value={form.description} onChange={(event) => setForm({ ...form, description: event.target.value })} rows={3} className="border-white/10 bg-background" />
-        </label>
-        <label className="space-y-2">
-          <Label>Category</Label>
-          <select value={form.type} onChange={(event) => setForm({ ...form, type: event.target.value as ResourceCategory })} className="h-10 w-full rounded-md border border-white/10 bg-background px-3 text-sm">
-            <option value="article">Article</option>
-            <option value="video">Video</option>
-            <option value="audio">Audio</option>
-          </select>
-        </label>
-        <label className="space-y-2">
-          <Label>Mood category</Label>
-          <select value={form.mood_category} onChange={(event) => setForm({ ...form, mood_category: event.target.value as ResourceMoodCategory })} className="h-10 w-full rounded-md border border-white/10 bg-background px-3 text-sm">
-            {RESOURCE_MOOD_CATEGORIES.filter((item) => item !== "all").map((item) => (
-              <option key={item} value={item}>{moodLabel(item)}</option>
-            ))}
-          </select>
-        </label>
-        <label className="space-y-2">
-          <Label>Duration</Label>
-          <Input value={form.estimated_duration} onChange={(event) => setForm({ ...form, estimated_duration: event.target.value })} placeholder="5 min, 8 min read, Live" className="border-white/10 bg-background" />
-        </label>
-        <label className="space-y-2">
-          <Label>Source platform</Label>
-          <Input value={form.source_platform} onChange={(event) => setForm({ ...form, source_platform: event.target.value })} placeholder="youtube, spotify, article..." className="border-white/10 bg-background" />
-        </label>
-        <label className="space-y-2 md:col-span-2">
-          <Label>Thumbnail URL</Label>
-          <Input value={form.thumbnail_url} onChange={(event) => setForm({ ...form, thumbnail_url: event.target.value })} className="border-white/10 bg-background" />
-        </label>
-        <label className="space-y-2 md:col-span-2">
-          <Label>Tags</Label>
-          <Input value={form.tags} onChange={(event) => setForm({ ...form, tags: event.target.value })} placeholder="stress, sleep, productivity" className="border-white/10 bg-background" />
-        </label>
-        <div className="flex items-center gap-6 md:col-span-2">
-          <label className="flex items-center gap-3">
-            <Switch checked={form.featured} onCheckedChange={(value) => setForm({ ...form, featured: value })} />
-            <span className="text-sm font-semibold">Featured</span>
-          </label>
-          <label className="flex items-center gap-3">
-            <Switch checked={form.is_published} onCheckedChange={(value) => setForm({ ...form, is_published: value })} />
-            <span className="text-sm font-semibold">Published</span>
-          </label>
-        </div>
-      </div>
-      <div className="mt-6 flex justify-end gap-2">
-        <Button variant="outline" className="rounded-full border-white/10 bg-white/[0.04]" onClick={onClose}>Cancel</Button>
-        <Button className="premium-button" onClick={submit}>{editing ? "Save changes" : "Create resource"}</Button>
-      </div>
-    </ModalShell>
-  );
-}
-
 function ResourceSkeleton() {
   return (
     <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
@@ -1096,15 +726,18 @@ function ResourceSkeleton() {
   );
 }
 
-function EmptyResources({ isAdmin, onAdd }: { isAdmin: boolean; onAdd: () => void }) {
+function EmptyResources({ hasPublishedResources }: { hasPublishedResources: boolean }) {
   return (
     <div className="premium-card p-8 text-center">
       <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl border border-primary/20 bg-primary/10 text-primary">
         <BookOpen className="h-6 w-6" />
       </div>
-      <h3 className="mt-4 text-xl font-bold">No matching resources</h3>
-      <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-muted-foreground">Try a different filter or search term.</p>
-      {isAdmin && <Button className="premium-button mt-5" onClick={onAdd}>Add Resource</Button>}
+      <h3 className="mt-4 text-xl font-bold">{hasPublishedResources ? "No matching resources" : "No resources published yet"}</h3>
+      <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-muted-foreground">
+        {hasPublishedResources
+          ? "Try a different filter."
+          : "The library will appear after an admin adds and publishes real resources from the Admin Dashboard."}
+      </p>
     </div>
   );
 }

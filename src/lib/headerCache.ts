@@ -108,3 +108,25 @@ export const updateHeaderMoodCache = (userId: string, todayMood: MoodEntry | nul
     );
   }
 };
+
+export const updateHeaderTestCache = (userId: string, latestTest: DepressionTest) => {
+  const current = readHeaderCache(userId);
+  if (!current) return;
+
+  const cache: HeaderCache = {
+    ...current,
+    dateKey: todayKey(),
+    latestTest,
+    testCount: current.testCount + 1,
+  };
+
+  writeHeaderCache(userId, cache);
+
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(
+      new CustomEvent<HeaderCacheUpdate>(HEADER_CACHE_UPDATED_EVENT, {
+        detail: { userId, cache },
+      }),
+    );
+  }
+};

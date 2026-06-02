@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "@/hooks/use-toast";
 import Navbar from "@/components/Navbar";
+import { getAuthErrorMessage } from "@/lib/authErrors";
 import {
   hasValidationErrors,
   validateConfirmPassword,
@@ -70,7 +71,7 @@ const ResetPassword = () => {
     }
     const { error } = await supabase.auth.updateUser({ password });
     setLoading(false);
-    if (error) return toast({ title: "Error", description: error.message, variant: "destructive" });
+    if (error) return toast({ title: "Error", description: getAuthErrorMessage(error), variant: "destructive" });
     toast({ title: "Password updated" });
     navigate("/dashboard");
   };

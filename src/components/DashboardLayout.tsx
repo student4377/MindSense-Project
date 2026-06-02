@@ -1,4 +1,4 @@
-import { ReactNode, useEffect, useMemo, useState } from "react";
+﻿import { ReactNode, useEffect, useMemo, useState } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import {
   Brain,
@@ -18,6 +18,8 @@ import {
   X,
   CheckCircle2,
   Clock,
+  ShieldCheck,
+  ShieldAlert,
   type LucideIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -39,6 +41,14 @@ type ProfileRow = Tables<"profiles">;
 type MoodEntry = Tables<"mood_entries">;
 type DepressionTest = Tables<"depression_tests">;
 
+type AccountAccessStatus = {
+  reviewStatus: "active" | "watch" | "needs_support" | "restricted";
+  priority: "normal" | "medium" | "high";
+  updatedAt: string | null;
+  isAdmin: boolean;
+  restricted: boolean;
+};
+
 type HeaderNotification = {
   id: string;
   title: string;
@@ -58,6 +68,8 @@ const items = [
   { to: "/profile", label: "Profile", icon: User },
   { to: "/settings", label: "Settings", icon: Settings },
 ];
+
+const adminItem = { to: "/admin", label: "Admin Dashboard", icon: ShieldCheck };
 
 const searchableItems = [
   {
@@ -125,6 +137,14 @@ const searchableItems = [
   },
 ];
 
+const adminSearchItem = {
+  to: "/admin",
+  label: "Admin Dashboard",
+  description: "Manage published resources and admin content",
+  keywords: ["admin", "resource manager", "publish", "draft", "moderation"],
+  icon: ShieldCheck,
+};
+
 export const DashboardLayout = ({ children }: { children: ReactNode }) => {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -137,6 +157,14 @@ export const DashboardLayout = ({ children }: { children: ReactNode }) => {
   const [todayMood, setTodayMood] = useState<MoodEntry | null>(() => initialHeaderCache?.todayMood ?? null);
   const [latestTest, setLatestTest] = useState<DepressionTest | null>(() => initialHeaderCache?.latestTest ?? null);
   const [testCount, setTestCount] = useState(() => initialHeaderCache?.testCount ?? 0);
+  const [accessStatus, setAccessStatus] = useState<AccountAccessStatus>({
+    reviewStatus: "active",
+    priority: "normal",
+    updatedAt: null,
+    isAdmin: false,
+    restricted: false,
+  });
+  const [accessStatusLoading, setAccessStatusLoading] = useState(() => Boolean(user));
   const [headerLoading, setHeaderLoading] = useState(() => !initialHeaderCache);
   const [headerReady, setHeaderReady] = useState(() => Boolean(initialHeaderCache));
   const [dismissedNotifications, setDismissedNotifications] = useState<string[]>([]);
@@ -153,6 +181,8 @@ export const DashboardLayout = ({ children }: { children: ReactNode }) => {
       setTodayMood(null);
       setLatestTest(null);
       setTestCount(0);
+      setAccessStatus({ reviewStatus: "active", priority: "normal", updatedAt: null, isAdmin: false, restricted: false });
+      setAccessStatusLoading(false);
       setHeaderReady(false);
       setHeaderLoading(false);
       return;
@@ -173,7 +203,7 @@ export const DashboardLayout = ({ children }: { children: ReactNode }) => {
 
     const loadHeaderData = async () => {
       setHeaderLoading(true);
-      const [profileResult, adminResult, todayMoodResult, latestTestResult, testCountResult] = await Promise.all([
+      const [profileResult, adminResult, todayMoodResult, latestTestResult, testCountResult, accessStatusResult] = await Promise.all([
         supabase.from("profiles").select("*").eq("id", user.id).maybeSingle(),
         supabase.from("admins").select("user_id").eq("user_id", user.id).maybeSingle(),
         supabase
@@ -192,6 +222,7 @@ export const DashboardLayout = ({ children }: { children: ReactNode }) => {
           .limit(1)
           .maybeSingle(),
         supabase.from("depression_tests").select("id", { count: "exact", head: true }).eq("user_id", user.id),
+        supabase.rpc("get_current_user_access_status"),
       ]);
 
       if (cancelled) return;
@@ -202,6 +233,24 @@ export const DashboardLayout = ({ children }: { children: ReactNode }) => {
       const resolvedName = profileData?.name || user.user_metadata?.name || user.email?.split("@")[0] || "User";
       const resolvedTestCount = testCountResult.count || 0;
       const resolvedIsAdmin = Boolean(adminResult.data);
+      const accessPayload =
+        accessStatusResult.data && typeof accessStatusResult.data === "object" && !Array.isArray(accessStatusResult.data)
+          ? (accessStatusResult.data as Record<string, unknown>)
+          : {};
+      const resolvedAccessStatus: AccountAccessStatus = accessStatusResult.error
+        ? { reviewStatus: "active", priority: "normal", updatedAt: null, isAdmin: resolvedIsAdmin, restricted: false }
+        : {
+            reviewStatus:
+              accessPayload.reviewStatus === "watch" ||
+              accessPayload.reviewStatus === "needs_support" ||
+              accessPayload.reviewStatus === "restricted"
+                ? accessPayload.reviewStatus
+                : "active",
+            priority: accessPayload.priority === "medium" || accessPayload.priority === "high" ? accessPayload.priority : "normal",
+            updatedAt: typeof accessPayload.updatedAt === "string" ? accessPayload.updatedAt : null,
+            isAdmin: Boolean(accessPayload.isAdmin) || resolvedIsAdmin,
+            restricted: Boolean(accessPayload.restricted) && !resolvedIsAdmin,
+          };
 
       setProfile(profileData);
       setName(resolvedName);
@@ -209,6 +258,8 @@ export const DashboardLayout = ({ children }: { children: ReactNode }) => {
       setTodayMood(moodData);
       setLatestTest(testData);
       setTestCount(resolvedTestCount);
+      setAccessStatus(resolvedAccessStatus);
+      setAccessStatusLoading(false);
       setHeaderReady(true);
       setHeaderLoading(false);
 
@@ -284,6 +335,7 @@ export const DashboardLayout = ({ children }: { children: ReactNode }) => {
   const displayName = name || user?.user_metadata?.name || user?.email?.split("@")[0] || "User";
   const accountRole = isAdmin ? "Admin" : "User";
   const initial = displayName.charAt(0).toUpperCase();
+  const AdminIcon = adminItem.icon;
   const closeMobile = () => setMobileOpen(false);
   const saveDismissedNotifications = (ids: string[]) => {
     setDismissedNotifications(ids);
@@ -372,9 +424,10 @@ export const DashboardLayout = ({ children }: { children: ReactNode }) => {
 
   const searchResults = useMemo(() => {
     const query = searchTerm.trim().toLowerCase();
-    if (!query) return searchableItems.slice(0, 5);
+    const availableItems = isAdmin ? [...searchableItems, adminSearchItem] : searchableItems;
+    if (!query) return availableItems.slice(0, 5);
 
-    return searchableItems
+    return availableItems
       .map((item) => {
         const haystack = `${item.label} ${item.description} ${item.keywords.join(" ")}`.toLowerCase();
         const words = query.split(/\s+/).filter(Boolean);
@@ -385,7 +438,7 @@ export const DashboardLayout = ({ children }: { children: ReactNode }) => {
       .sort((a, b) => b.score - a.score)
       .map(({ item }) => item)
       .slice(0, 6);
-  }, [searchTerm]);
+  }, [isAdmin, searchTerm]);
 
   const goToSearchResult = (to: string) => {
     setSearchOpen(false);
@@ -401,6 +454,56 @@ export const DashboardLayout = ({ children }: { children: ReactNode }) => {
     }
     navigate("/resources");
   };
+
+  if (user && accessStatusLoading) {
+    return (
+      <div className="premium-page relative flex min-h-screen items-center justify-center overflow-hidden p-4">
+        <div className="premium-grid pointer-events-none fixed inset-0 opacity-35" />
+        <div className="glass-panel relative z-10 w-full max-w-md rounded-3xl border-white/10 p-8 text-center">
+          <ShieldCheck className="mx-auto h-8 w-8 animate-pulse text-primary" />
+          <h1 className="mt-4 text-2xl font-extrabold">Checking account access</h1>
+          <p className="mt-2 text-sm text-muted-foreground">MindSense is confirming your account status before opening the workspace.</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (accessStatus.restricted && !accessStatus.isAdmin && !isAdmin) {
+    return (
+      <div className="premium-page relative flex min-h-screen items-center justify-center overflow-hidden p-4">
+        <div className="premium-grid pointer-events-none fixed inset-0 opacity-35" />
+        <div className="ambient-beams pointer-events-none fixed inset-0 opacity-40" />
+        <section className="glass-panel relative z-10 w-full max-w-2xl overflow-hidden rounded-[2rem] border-white/10 p-6 text-center md:p-8">
+          <div className="pointer-events-none absolute -right-16 -top-16 h-48 w-48 rounded-full bg-amber-300/15 blur-3xl" />
+          <div className="relative">
+            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl border border-amber-300/25 bg-amber-300/10 text-amber-100">
+              <ShieldAlert className="h-8 w-8" />
+            </div>
+            <Badge variant="outline" className="mt-5 border-amber-300/25 bg-amber-300/10 text-amber-100">
+              Account restricted
+            </Badge>
+            <h1 className="mt-5 text-3xl font-extrabold md:text-4xl">Your MindSense workspace is temporarily limited.</h1>
+            <p className="mx-auto mt-3 max-w-xl text-sm leading-6 text-muted-foreground md:text-base">
+              An administrator has restricted this account. You can still sign out or contact the MindSense team for help.
+            </p>
+            <div className="mt-6 grid gap-3 sm:grid-cols-2">
+              <Button className="premium-button" onClick={() => navigate("/contact")}>
+                <Headphones className="h-4 w-4" />
+                Contact Team
+              </Button>
+              <Button variant="outline" className="rounded-full border-white/10 bg-white/[0.04]" onClick={() => navigate("/logout")}>
+                <LogOut className="h-4 w-4" />
+                Sign Out
+              </Button>
+            </div>
+            <div className="mt-5 rounded-2xl border border-white/10 bg-white/[0.04] p-4 text-left text-sm text-muted-foreground">
+              This is a soft access restriction for project safety. It does not delete your account or remove your saved wellness data.
+            </div>
+          </div>
+        </section>
+      </div>
+    );
+  }
 
   return (
     <div className="premium-page relative flex min-h-screen overflow-hidden">
@@ -461,6 +564,23 @@ export const DashboardLayout = ({ children }: { children: ReactNode }) => {
               >
                 <LogOut className="h-4 w-4" /> Logout
               </button>
+              {isAdmin && (
+                <NavLink
+                  to={adminItem.to}
+                  end
+                  onClick={closeMobile}
+                  className={({ isActive }) =>
+                    `flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium transition ${
+                      isActive
+                        ? "bg-gradient-to-r from-primary to-primary-glow text-primary-foreground shadow-[var(--shadow-soft)]"
+                        : "text-muted-foreground hover:bg-white/[0.06] hover:text-foreground"
+                    }`
+                  }
+                >
+                  <AdminIcon className="h-4 w-4" />
+                  {adminItem.label}
+                </NavLink>
+              )}
             </nav>
 
             <div className="m-4 rounded-2xl border border-white/10 bg-white/[0.05] p-4 text-sm">
@@ -510,6 +630,22 @@ export const DashboardLayout = ({ children }: { children: ReactNode }) => {
           >
             <LogOut className="h-4 w-4" /> Logout
           </button>
+          {isAdmin && (
+            <NavLink
+              to={adminItem.to}
+              end
+              className={({ isActive }) =>
+                `group flex items-center gap-3 rounded-xl px-4 py-2.5 text-sm font-medium transition ${
+                  isActive
+                    ? "bg-gradient-to-r from-primary to-primary-glow text-primary-foreground shadow-[var(--shadow-soft)]"
+                    : "text-muted-foreground hover:bg-white/[0.06] hover:text-foreground"
+                }`
+              }
+            >
+              <AdminIcon className="h-4 w-4 transition group-hover:scale-110" />
+              {adminItem.label}
+            </NavLink>
+          )}
         </nav>
 
         <div className="m-4 rounded-2xl border border-primary/20 bg-primary/10 p-4 text-sm">
@@ -597,11 +733,11 @@ export const DashboardLayout = ({ children }: { children: ReactNode }) => {
                 )}
               </button>
               {notificationOpen && (
-                <div className="absolute right-0 top-12 z-40 w-[min(22rem,calc(100vw-2rem))] overflow-hidden rounded-xl border border-white/15 bg-[#101722]/98 shadow-[0_24px_70px_rgba(0,0,0,0.55)]">
-                  <div className="flex items-center justify-between border-b border-white/10 bg-white/[0.03] px-4 py-3">
+                <div className="absolute right-0 top-12 z-40 w-[min(22rem,calc(100vw-2rem))] overflow-hidden rounded-xl border border-white/15 bg-popover text-popover-foreground shadow-[0_24px_70px_rgba(0,0,0,0.38)]">
+                  <div className="flex items-center justify-between border-b border-white/10 bg-secondary/45 px-4 py-3">
                     <div>
-                      <div className="font-semibold text-white">Notifications</div>
-                      <div className="text-xs text-slate-300">
+                      <div className="font-semibold text-foreground">Notifications</div>
+                      <div className="text-xs text-muted-foreground">
                         {!notificationsReady || headerLoading ? "Checking updates..." : `${notificationCount} active update${notificationCount === 1 ? "" : "s"}`}
                       </div>
                     </div>
@@ -617,7 +753,7 @@ export const DashboardLayout = ({ children }: { children: ReactNode }) => {
                   </div>
                   <div className="max-h-96 overflow-y-auto p-2">
                     {!notificationsReady ? (
-                      <div className="px-3 py-4 text-sm text-slate-300">Checking your latest profile, mood, and assessment updates...</div>
+                      <div className="px-3 py-4 text-sm text-muted-foreground">Checking your latest profile, mood, and assessment updates...</div>
                     ) : (
                       visibleNotifications.map((notification) => (
                         <button
@@ -642,21 +778,21 @@ export const DashboardLayout = ({ children }: { children: ReactNode }) => {
                           </div>
                           <div className="min-w-0 flex-1">
                             <div className="flex items-center gap-2">
-                              <div className="text-sm font-semibold text-white">{notification.title}</div>
+                              <div className="text-sm font-semibold text-foreground">{notification.title}</div>
                               {notification.tone === "warning" && (
                                 <Badge variant="outline" className="border-amber-300/50 px-1.5 py-0 text-[10px] text-amber-300">
                                   Action
                                 </Badge>
                               )}
                             </div>
-                            <p className="mt-1 text-xs leading-relaxed text-slate-300">{notification.description}</p>
+                            <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{notification.description}</p>
                           </div>
                         </button>
                       ))
                     )}
                   </div>
                   <div className="border-t border-white/10 px-4 py-3">
-                    <Button className="w-full rounded-full border-white/15 bg-white/[0.06] text-white hover:bg-white/[0.1]" variant="outline" size="sm" onClick={() => navigate("/history")}>
+                    <Button className="w-full rounded-full border-white/15 bg-white/[0.06] hover:bg-white/[0.1]" variant="outline" size="sm" onClick={() => navigate("/history")}>
                       View Reports
                     </Button>
                   </div>
@@ -691,3 +827,4 @@ export const DashboardLayout = ({ children }: { children: ReactNode }) => {
 };
 
 export default DashboardLayout;
+
