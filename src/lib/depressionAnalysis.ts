@@ -2,11 +2,10 @@ export const AUDIO_SECONDS = 20;
 export const VIDEO_SECONDS = 20;
 export const MIN_SIGNAL_SECONDS = 15;
 
-export const FUSION_WEIGHTS = {
-  text: 0.5,
-  audio: 0.25,
-  video: 0.25,
-} as const;
+export const TEXT_NARRATIVE_PROMPT =
+  "In a few sentences, describe how your mood, sleep, energy, stress, motivation, and daily routine have been during the past two weeks.";
+
+export type DepressionSeverity = "minimal" | "mild" | "moderate" | "moderately_severe" | "severe";
 
 export type ScreeningAnswer = {
   id: string;
@@ -37,34 +36,112 @@ export type VideoSignalMetrics = {
   issues: string[];
 };
 
+export type LearnedFusionGates = {
+  text: number | null;
+  audio: number | null;
+  video: number | null;
+};
+
+export type ModalityDiagnostics = {
+  textConfidence?: number | null;
+  audioConfidence?: number | null;
+  videoConfidence?: number | null;
+  gates?: LearnedFusionGates | null;
+};
+
 export type FusionResult = {
-  textScore: number;
-  audioScore: number;
-  videoScore: number;
-  finalScore: number;
+  phqScore: number;
   confidence: number;
-  severity: "minimal" | "mild" | "moderate" | "high" | "severe";
+  severity: DepressionSeverity;
   severityLabel: string;
   recommendation: string;
   observations: string[];
+  modelVersion: string;
+  source: "learned_model" | "questionnaire_baseline";
+  modalityDiagnostics?: ModalityDiagnostics;
 };
 
 const clamp = (value: number, min = 0, max = 100) => Math.max(min, Math.min(max, value));
 
+const clampPhq = (value: number) => Math.max(0, Math.min(24, value));
+
 const round = (value: number) => Math.round(value);
 
-export const questionnaireSignalScore = (answers: ScreeningAnswer[]) => {
-  if (!answers.length) return 0;
-  const total = answers.reduce((sum, answer) => sum + answer.phqScore, 0);
-  return round((total / (answers.length * 3)) * 100);
+export const phqScoreFromAnswers = (answers: ScreeningAnswer[]) =>
+  clampPhq(answers.reduce((sum, answer) => sum + answer.phqScore, 0));
+
+export const interpretPhqSeverity = (score: number): DepressionSeverity => {
+  const phq = clampPhq(score);
+  if (phq <= 4) return "minimal";
+  if (phq <= 9) return "mild";
+  if (phq <= 14) return "moderate";
+  if (phq <= 19) return "moderately_severe";
+  return "severe";
 };
 
-export const questionnaireSeverityLabel = (score: number) => {
-  if (score < 20) return "Minimal support signal";
-  if (score < 38) return "Mild support signal";
-  if (score < 58) return "Moderate support signal";
-  if (score < 78) return "High support signal";
-  return "Severe support signal";
+export const severityLabelForPhq = (severity: DepressionSeverity) => {
+  switch (severity) {
+    case "minimal":
+      return "Minimal";
+    case "mild":
+      return "Mild";
+    case "moderate":
+      return "Moderate";
+    case "moderately_severe":
+      return "Moderately Severe";
+    case "severe":
+      return "Severe";
+  }
+};
+
+export const recommendationForSeverity = (severity: DepressionSeverity) => {
+  switch (severity) {
+    case "minimal":
+      return "Keep tracking your mood and maintain your current wellness routines.";
+    case "mild":
+      return "Use mood tracking, sleep support, and short grounding exercises this week.";
+    case "moderate":
+      return "Add structured support habits and consider speaking with a trusted person or professional.";
+    case "moderately_severe":
+      return "Consider professional support soon and keep trusted support nearby.";
+    case "severe":
+      return "Consider urgent professional support and use crisis guidance if you feel unsafe.";
+  }
+};
+
+export const buildQuestionnaireBaselineResult = (
+  answers: ScreeningAnswer[],
+  options?: {
+    hasNarrative?: boolean;
+    audioPassed?: boolean;
+    videoPassed?: boolean;
+  },
+): FusionResult => {
+  const phqScore = phqScoreFromAnswers(answers);
+  const severity = interpretPhqSeverity(phqScore);
+  const observations = [
+    `Structured questionnaire PHQ signal is ${phqScore.toFixed(1)}/24.`,
+    options?.hasNarrative
+      ? "Open-ended text response captured for the trained NLP encoder."
+      : "Open-ended text response was not captured.",
+    options?.audioPassed
+      ? "Voice recording passed quality checks and is ready for the learned audio encoder."
+      : "Voice recording needs review before learned audio inference.",
+    options?.videoPassed
+      ? "Video recording passed quality checks and is ready for the learned visual encoder."
+      : "Video recording needs review before learned visual inference.",
+  ];
+
+  return {
+    phqScore,
+    confidence: 0.45,
+    severity,
+    severityLabel: severityLabelForPhq(severity),
+    recommendation: recommendationForSeverity(severity),
+    observations,
+    modelVersion: "questionnaire-baseline",
+    source: "questionnaire_baseline",
+  };
 };
 
 export const evaluateAudioQuality = (metrics: {
@@ -122,67 +199,5 @@ export const evaluateVideoQuality = (metrics: {
     qualityScore,
     passed: issues.length === 0,
     issues,
-  };
-};
-
-export const buildFusionResult = (
-  answers: ScreeningAnswer[],
-  audio: AudioSignalMetrics,
-  video: VideoSignalMetrics,
-): FusionResult => {
-  const textScore = questionnaireSignalScore(answers);
-  const audioScore = clamp(audio.qualityScore);
-  const videoScore = clamp(video.qualityScore);
-  const finalScore = round(
-    textScore * FUSION_WEIGHTS.text +
-      audioScore * FUSION_WEIGHTS.audio +
-      videoScore * FUSION_WEIGHTS.video,
-  );
-  const confidence = round(
-    72 +
-      (audio.passed ? 8 : 0) +
-      (video.passed ? 8 : 0) +
-      (answers.length >= 8 ? 6 : 0) +
-      (audio.voiceActivityRatio > 0.45 ? 3 : 0) +
-      ((video.brightnessScore ?? 35) > 28 ? 3 : 0),
-  );
-
-  const severity =
-    finalScore < 20
-      ? "minimal"
-      : finalScore < 38
-        ? "mild"
-        : finalScore < 58
-          ? "moderate"
-          : finalScore < 78
-            ? "high"
-            : "severe";
-
-  const severityLabel = questionnaireSeverityLabel(finalScore);
-  const recommendation =
-    severity === "minimal"
-      ? "Keep tracking your mood and maintain your current wellness routines."
-      : severity === "mild"
-        ? "Use mood tracking, sleep support, and short grounding exercises this week."
-        : severity === "moderate"
-          ? "Add structured support habits and consider speaking with a trusted person or professional."
-          : "Consider professional support soon and use crisis guidance if you feel unsafe.";
-
-  const observations = [
-    `Questionnaire contribution is ${Math.round(FUSION_WEIGHTS.text * 100)}% of the final score.`,
-    `Voice sample passed clarity checks with ${Math.round(audio.voiceActivityRatio * 100)}% voice activity.`,
-    `Video sample passed capture checks${video.brightnessScore === null ? "." : ` with ${Math.round(video.brightnessScore)}% brightness signal.`}`,
-  ];
-
-  return {
-    textScore,
-    audioScore,
-    videoScore,
-    finalScore,
-    confidence: clamp(confidence),
-    severity,
-    severityLabel,
-    recommendation,
-    observations,
   };
 };

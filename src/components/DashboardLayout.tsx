@@ -455,7 +455,7 @@ export const DashboardLayout = ({ children }: { children: ReactNode }) => {
     navigate("/resources");
   };
 
-  if (user && accessStatusLoading) {
+  if (user && accessStatusLoading && !headerReady) {
     return (
       <div className="premium-page relative flex min-h-screen items-center justify-center overflow-hidden p-4">
         <div className="premium-grid pointer-events-none fixed inset-0 opacity-35" />

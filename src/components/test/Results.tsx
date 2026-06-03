@@ -16,13 +16,12 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { TestData } from "@/pages/DepressionTest";
-import { FUSION_WEIGHTS, type FusionResult } from "@/lib/depressionAnalysis";
+import type { FusionResult } from "@/lib/depressionAnalysis";
 
 type ReportModality = {
   icon: LucideIcon;
   label: string;
   value: number;
-  weight: number;
   detail: string;
   note: string;
   color: string;
@@ -53,32 +52,33 @@ export default function Results({
   const breakdown: ReportModality[] = [
     {
       icon: Brain,
-      label: "Questionnaire",
-      value: result.textScore,
-      weight: FUSION_WEIGHTS.text,
-      detail: `${data.textAnswers.length} structured responses completed`,
-      note: "Highest weighted screening input",
+      label: "Text Input",
+      value: data.textNarrative?.trim() ? 100 : 75,
+      detail: `${data.textAnswers.length} structured responses${data.textNarrative?.trim() ? " + written response" : ""}`,
+      note: data.textNarrative?.trim() ? "Ready for transformer text encoder" : "Questionnaire-only fallback input",
       color: "#22d3ee",
     },
     {
       icon: Mic,
       label: "Audio",
-      value: result.audioScore,
-      weight: FUSION_WEIGHTS.audio,
+      value: data.audioMetrics?.qualityScore ?? 0,
       detail: `${Math.round((data.audioMetrics?.voiceActivityRatio ?? 0) * 100)}% voice activity`,
-      note: "English/Urdu voice quality gate",
+      note: "Ready for learned audio encoder",
       color: "#a78bfa",
     },
     {
       icon: Video,
       label: "Video",
-      value: result.videoScore,
-      weight: FUSION_WEIGHTS.video,
+      value: data.videoMetrics?.qualityScore ?? 0,
       detail: `${Math.round(data.videoMetrics?.durationSeconds ?? 0)} second camera capture`,
-      note: "Lighting and capture readiness",
+      note: "Ready for learned visual encoder",
       color: "#34d399",
     },
   ];
+
+  const phqPercent = clamp((result.phqScore / 24) * 100);
+  const confidencePercent = clamp(result.confidence * 100);
+  const sourceLabel = result.source === "learned_model" ? result.modelVersion : "Questionnaire baseline";
 
   const nextSteps =
     result.severity === "minimal"
@@ -87,11 +87,13 @@ export default function Results({
         ? ["Track mood for the next 7 days.", "Try a 3-minute breathing reset.", "Use sleep support if rest is poor."]
         : result.severity === "moderate"
           ? ["Use therapy/support tools today.", "Share how you feel with a trusted person.", "Consider professional support if this continues."]
+          : result.severity === "moderately_severe"
+            ? ["Consider professional support soon.", "Ask a trusted person to stay connected today.", "Use crisis guidance if you feel unsafe."]
           : ["Consider professional support soon.", "Use crisis guidance if you feel unsafe.", "Ask a trusted person to stay connected today."];
 
   const riskRows = [
     {
-      label: "Depression support signal",
+      label: "Severity band",
       value: result.severityLabel,
       screenTone:
         result.severity === "minimal" || result.severity === "mild"
@@ -104,11 +106,11 @@ export default function Results({
           ? "text-[#047857]"
           : result.severity === "moderate"
             ? "text-[#b45309]"
-            : "text-[#be123c]",
+          : "text-[#be123c]",
     },
-    { label: "Questionnaire weight", value: "50%", screenTone: "text-cyan-200", printTone: "text-[#0f172a]" },
-    { label: "Audio weight", value: "25%", screenTone: "text-cyan-200", printTone: "text-[#0f172a]" },
-    { label: "Video weight", value: "25%", screenTone: "text-cyan-200", printTone: "text-[#0f172a]" },
+    { label: "PHQ prediction", value: `${result.phqScore.toFixed(1)}/24`, screenTone: "text-cyan-200", printTone: "text-[#0f172a]" },
+    { label: "Model source", value: sourceLabel, screenTone: "text-cyan-200", printTone: "text-[#0f172a]" },
+    { label: "Confidence", value: `${Math.round(confidencePercent)}%`, screenTone: "text-cyan-200", printTone: "text-[#0f172a]" },
   ];
 
   return (
@@ -133,7 +135,7 @@ export default function Results({
                 Multimodal depression screening summary
               </h1>
               <p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground md:text-base">
-                MindSense combined questionnaire, voice, and video capture signals using a transparent 50/25/25 fusion. This is a wellness screening result, not a medical diagnosis.
+                MindSense maps questionnaire, written text, voice, and video signals to a PHQ-8 prediction through learned multimodal fusion. This is a wellness screening result, not a medical diagnosis.
               </p>
             </div>
             <div className="min-w-52 rounded-2xl border border-white/10 bg-black/20 p-4 text-sm">
@@ -147,10 +149,10 @@ export default function Results({
         <main className="relative p-5 md:p-7">
           <section className="grid gap-5 xl:grid-cols-[20rem_minmax(0,1fr)]">
             <div className="rounded-[1.75rem] border border-primary/20 bg-primary/8 p-5">
-              <ScreenGauge value={result.finalScore} label="Support Signal" />
+              <ScreenGauge value={phqPercent} label="PHQ Severity" />
               <div className="mt-5 text-center">
                 <div className="text-2xl font-extrabold">{result.severityLabel}</div>
-                <div className="mt-1 text-sm text-muted-foreground">Confidence {result.confidence}%</div>
+                <div className="mt-1 text-sm text-muted-foreground">PHQ {result.phqScore.toFixed(1)}/24 · Confidence {Math.round(confidencePercent)}%</div>
               </div>
             </div>
 
@@ -161,7 +163,7 @@ export default function Results({
                   <h2 className="mt-2 text-2xl font-extrabold">Screening interpretation</h2>
                 </div>
                 <span className="rounded-full border border-primary/20 bg-primary/10 px-3 py-1 text-xs font-bold text-primary">
-                  50/25/25 fusion
+                  {sourceLabel}
                 </span>
               </div>
               <p className="mt-4 text-sm leading-7 text-muted-foreground">{result.recommendation}</p>
@@ -205,7 +207,7 @@ export default function Results({
             </DarkPanel>
           </section>
 
-          {(result.severity === "high" || result.severity === "severe") && (
+          {(result.severity === "moderately_severe" || result.severity === "severe") && (
             <section className="mt-5 rounded-[1.5rem] border border-amber-300/25 bg-amber-300/10 p-5 text-amber-50">
               <div className="flex gap-3">
                 <AlertTriangle className="mt-1 h-5 w-5 shrink-0" />
@@ -225,7 +227,7 @@ export default function Results({
               Important disclaimer
             </h3>
             <p className="mt-2 text-sm leading-6 text-muted-foreground">
-              MindSense is an AI-assisted wellness screening platform. This report does not diagnose depression or replace a licensed mental health professional. Audio and video are currently evaluated through rule-based signal checks until the trained Python multimodal model is connected.
+              MindSense is an AI-assisted wellness screening platform. This report does not diagnose depression or replace a licensed mental health professional. When the Python service is connected, modality importance is learned by the model rather than assigned by manual percentages.
             </p>
           </section>
         </main>
@@ -285,6 +287,10 @@ function PrintReport({
   nextSteps: string[];
   riskRows: Array<{ label: string; value: string; printTone: string }>;
 }) {
+  const phqPercent = clamp((result.phqScore / 24) * 100);
+  const confidencePercent = clamp(result.confidence * 100);
+  const sourceLabel = result.source === "learned_model" ? result.modelVersion : "Questionnaire baseline";
+
   return (
     <article className="wellness-report-print hidden bg-white text-[#0f172a]">
       <section className="report-print-page bg-white">
@@ -300,7 +306,7 @@ function PrintReport({
                 Multimodal Depression Screening Summary
               </h1>
               <p className="mt-3 max-w-2xl text-sm leading-6 text-[#475569]">
-                A structured wellness report combining questionnaire, audio, and video readiness signals with a transparent 50/25/25 fusion model.
+                A structured wellness report mapping questionnaire, written text, audio, and video evidence to an interpretable PHQ-8 severity band.
               </p>
             </div>
             <div className="min-w-52 rounded-2xl border border-[#e2e8f0] bg-white/90 p-4 text-sm shadow-sm">
@@ -313,10 +319,10 @@ function PrintReport({
 
         <div className="mt-6 grid grid-cols-[15rem_minmax(0,1fr)] gap-5">
           <div className="rounded-[1.5rem] border border-[#e2e8f0] bg-[#f8fafc] p-5">
-            <PrintGauge value={result.finalScore} label="Support Signal" />
+            <PrintGauge value={phqPercent} label="PHQ Severity" />
             <div className="mt-4 text-center">
               <div className="text-lg font-extrabold text-[#020617]">{result.severityLabel}</div>
-              <div className="mt-1 text-sm text-[#64748b]">Confidence {result.confidence}%</div>
+              <div className="mt-1 text-sm text-[#64748b]">PHQ {result.phqScore.toFixed(1)}/24 · Confidence {Math.round(confidencePercent)}%</div>
             </div>
           </div>
 
@@ -327,7 +333,7 @@ function PrintReport({
                 <h2 className="mt-2 text-2xl font-extrabold text-[#020617]">Screening interpretation</h2>
               </div>
               <span className="rounded-full border border-[#bae6fd] bg-[#ecfeff] px-3 py-1 text-xs font-bold text-[#0f766e]">
-                50/25/25 Fusion
+                {sourceLabel}
               </span>
             </div>
             <p className="mt-4 text-sm leading-7 text-[#475569]">{result.recommendation}</p>
@@ -345,7 +351,7 @@ function PrintReport({
         <div className="mt-6 rounded-[1.5rem] border border-[#dbeafe] bg-[#eff6ff] p-5">
           <div className="text-xs font-extrabold uppercase tracking-[0.16em] text-[#2563eb]">How to read this report</div>
           <p className="mt-2 text-sm leading-6 text-[#334155]">
-            The questionnaire carries the highest weight because it is the most structured input. Audio and video add signal quality context and will connect to the trained multimodal model when the dataset and Python service are available.
+            PHQ-8 severity is shown as a clinical-style band. When the learned Python service is connected, text, audio, and video embeddings are fused by trainable gates instead of manually assigned percentages.
           </p>
         </div>
 
@@ -397,7 +403,7 @@ function PrintReport({
         <section className="report-print-section mt-5 rounded-[1.5rem] border border-[#e2e8f0] bg-[#f8fafc] p-5">
           <h3 className="text-lg font-extrabold text-[#020617]">Important disclaimer</h3>
           <p className="mt-2 text-sm leading-6 text-[#475569]">
-            MindSense is an AI-assisted wellness screening platform. This report does not diagnose depression or replace a licensed mental health professional. Audio and video are currently evaluated through rule-based signal checks until the trained Python multimodal model is connected.
+            MindSense is an AI-assisted wellness screening platform. This report does not diagnose depression or replace a licensed mental health professional. When the Python service is connected, modality importance is learned by the model rather than assigned by manual percentages.
           </p>
         </section>
 
@@ -481,9 +487,7 @@ function ScreenModalityCard({ item, index }: { item: ReportModality; index: numb
         <div className="flex h-12 w-12 items-center justify-center rounded-2xl text-[#06101d]" style={{ backgroundColor: item.color }}>
           <Icon className="h-5 w-5" />
         </div>
-        <span className="rounded-full border border-primary/20 bg-primary/10 px-3 py-1 text-xs font-bold text-primary">
-          {Math.round(item.weight * 100)}% weight
-        </span>
+        <span className="rounded-full border border-primary/20 bg-primary/10 px-3 py-1 text-xs font-bold text-primary">Evidence</span>
       </div>
       <div className="mt-5 text-xs font-extrabold uppercase tracking-[0.16em] text-muted-foreground">{item.label}</div>
       <div className="mt-2 text-4xl font-extrabold">{Math.round(item.value)}/100</div>
@@ -504,9 +508,7 @@ function PrintModalityCard({ item }: { item: ReportModality }) {
         <div className="flex h-10 w-10 items-center justify-center rounded-2xl text-white" style={{ backgroundColor: item.color }}>
           <Icon className="h-5 w-5" />
         </div>
-        <span className="rounded-full border border-[#e2e8f0] bg-[#f8fafc] px-3 py-1 text-xs font-bold text-[#475569]">
-          {Math.round(item.weight * 100)}% weight
-        </span>
+        <span className="rounded-full border border-[#e2e8f0] bg-[#f8fafc] px-3 py-1 text-xs font-bold text-[#475569]">Evidence</span>
       </div>
       <div className="mt-4 text-xs font-extrabold uppercase tracking-[0.16em] text-[#64748b]">{item.label}</div>
       <div className="mt-2 text-3xl font-extrabold text-[#020617]">{Math.round(item.value)}/100</div>

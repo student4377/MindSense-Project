@@ -10,7 +10,7 @@ import { evaluateVideoQuality, type VideoSignalMetrics, VIDEO_SECONDS } from "@/
 export default function VideoTest({
   onComplete,
 }: {
-  onComplete: (path: string, metrics: VideoSignalMetrics) => void;
+  onComplete: (path: string, metrics: VideoSignalMetrics) => Promise<void> | void;
 }) {
   const { user } = useAuth();
   const [state, setState] = useState<"idle" | "preview" | "recording" | "review" | "uploading" | "done">("idle");
@@ -157,7 +157,12 @@ export default function VideoTest({
       return;
     }
 
-    onComplete(videoPath, nextMetrics);
+    try {
+      await onComplete(videoPath, nextMetrics);
+    } catch {
+      toast.error("Analysis could not start. Please try again.");
+      setState("review");
+    }
   };
 
   const playVideoPreview = async () => {

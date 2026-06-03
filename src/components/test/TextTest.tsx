@@ -4,6 +4,7 @@ import {
   CheckCircle2,
   CloudRain,
   Heart,
+  MessageCircle,
   Smile,
   Sparkles,
   Sun,
@@ -11,7 +12,8 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import type { ScreeningAnswer } from "@/lib/depressionAnalysis";
+import { Textarea } from "@/components/ui/textarea";
+import { TEXT_NARRATIVE_PROMPT, type ScreeningAnswer } from "@/lib/depressionAnalysis";
 
 const QUESTIONS: Array<Pick<ScreeningAnswer, "id" | "question" | "domain">> = [
   {
@@ -69,15 +71,18 @@ const ENCOURAGEMENTS: Record<number, string> = {
   6: "Almost there. Keep going gently.",
 };
 
+const MIN_NARRATIVE_CHARS = 40;
+
 export default function TextTest({
   onComplete,
 }: {
-  onComplete: (answers: ScreeningAnswer[]) => void;
+  onComplete: (answers: ScreeningAnswer[], narrative: string) => void;
 }) {
   const [i, setI] = useState(0);
   const [answers, setAnswers] = useState<ScreeningAnswer[]>([]);
   const [done, setDone] = useState(false);
   const [encourage, setEncourage] = useState<string | null>(null);
+  const [narrative, setNarrative] = useState("");
 
   const handle = (option: (typeof OPTIONS)[number]) => {
     const question = QUESTIONS[i];
@@ -112,6 +117,8 @@ export default function TextTest({
   };
 
   const progress = ((i + (done ? 1 : 0)) / QUESTIONS.length) * 100;
+  const trimmedNarrative = narrative.trim();
+  const narrativeReady = trimmedNarrative.length >= MIN_NARRATIVE_CHARS;
 
   return (
     <div className="space-y-5">
@@ -198,23 +205,54 @@ export default function TextTest({
           </motion.section>
         ) : (
           <motion.section
-            key="done"
+            key="narrative"
             initial={{ opacity: 0, scale: 0.96 }}
             animate={{ opacity: 1, scale: 1 }}
-            className="premium-card relative overflow-hidden p-8 text-center md:p-12"
+            className="premium-card relative overflow-hidden p-5 md:p-8"
           >
             <div className="premium-grid pointer-events-none absolute inset-0 opacity-20" />
             <div className="relative">
-              <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-[var(--shadow-glow)]">
-                <CheckCircle2 className="h-10 w-10" />
+              <div className="flex flex-wrap items-start justify-between gap-5">
+                <div className="max-w-3xl">
+                  <div className="inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/10 px-3 py-1.5 text-xs font-bold uppercase tracking-[0.16em] text-primary">
+                    <MessageCircle className="h-3.5 w-3.5" />
+                    Open response
+                  </div>
+                  <h3 className="mt-5 text-3xl font-extrabold leading-tight md:text-4xl">Share your experience in your own words.</h3>
+                  <p className="mt-3 text-sm leading-6 text-muted-foreground md:text-base">{TEXT_NARRATIVE_PROMPT}</p>
+                </div>
+                <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-[var(--shadow-glow)]">
+                  <CheckCircle2 className="h-8 w-8" />
+                </div>
               </div>
-              <h3 className="mt-6 text-3xl font-extrabold">Questionnaire complete</h3>
-              <p className="mx-auto mt-3 max-w-md text-sm leading-6 text-muted-foreground">
-                Your questionnaire signal is complete. Continue to the required 20-second voice sample for multimodal fusion.
-              </p>
-              <Button onClick={() => onComplete(answers)} size="lg" className="premium-button mt-7 px-7">
-                Continue to voice test
-              </Button>
+
+              <div className="mt-7 rounded-[1.5rem] border border-white/10 bg-black/15 p-4">
+                <Textarea
+                  value={narrative}
+                  onChange={(event) => setNarrative(event.target.value)}
+                  aria-label="Open response about recent mood and daily routine"
+                  placeholder="Example: My sleep has been irregular, I feel tired during classes, and small tasks have felt harder than usual..."
+                  className="min-h-44 resize-y rounded-2xl border-white/10 bg-white/[0.04] p-4 text-base leading-7"
+                />
+                <div className="mt-3 flex flex-wrap items-center justify-between gap-3 text-xs text-muted-foreground">
+                  <span>{trimmedNarrative.length} characters</span>
+                  <span>{narrativeReady ? "Response ready" : `Add at least ${MIN_NARRATIVE_CHARS - trimmedNarrative.length} more characters`}</span>
+                </div>
+              </div>
+
+              <div className="mt-7 flex flex-wrap items-center justify-between gap-3">
+                <p className="max-w-xl text-sm leading-6 text-muted-foreground">
+                  Your structured answers and written response will continue into the required 20-second voice sample.
+                </p>
+                <Button
+                  onClick={() => onComplete(answers, trimmedNarrative)}
+                  disabled={!narrativeReady}
+                  size="lg"
+                  className="premium-button px-7"
+                >
+                  Continue to voice test
+                </Button>
+              </div>
             </div>
           </motion.section>
         )}

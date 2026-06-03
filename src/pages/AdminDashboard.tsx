@@ -1464,12 +1464,6 @@ const AdminDashboard = () => {
 
   const saveAiSettings = async (nextSettings = aiSettingsDraft) => {
     if (!user) return;
-    const weightTotal = nextSettings.textWeight + nextSettings.audioWeight + nextSettings.videoWeight;
-    if (weightTotal !== 100) {
-      toast({ title: "Fusion weights must equal 100%", description: `Current total is ${weightTotal}%.`, variant: "destructive" });
-      return;
-    }
-
     if (nextSettings.highRiskThreshold >= nextSettings.watchThreshold) {
       toast({
         title: "Risk thresholds need adjustment",
@@ -1511,9 +1505,6 @@ const AdminDashboard = () => {
       entityId: "default",
       summary: "Updated AI model governance settings",
       metadata: {
-        textWeight: normalized.textWeight,
-        audioWeight: normalized.audioWeight,
-        videoWeight: normalized.videoWeight,
         highRiskThreshold: normalized.highRiskThreshold,
         watchThreshold: normalized.watchThreshold,
         sensitivity: normalized.analysisSensitivity,
@@ -3001,8 +2992,6 @@ function AiModelSettingsPanel({
   onReset: () => void;
   onRefresh: () => void;
 }) {
-  const weightTotal = draft.textWeight + draft.audioWeight + draft.videoWeight;
-  const weightsValid = weightTotal === 100;
   const thresholdsValid = draft.highRiskThreshold < draft.watchThreshold;
   const updatedLabel = settings.updatedAt ? formatAdminDate(settings.updatedAt) : "Default controls";
 
@@ -3019,7 +3008,7 @@ function AiModelSettingsPanel({
             AI Model Settings
           </h2>
           <p className="mt-1 max-w-3xl text-sm leading-6 text-muted-foreground">
-            Configure fusion weights, risk thresholds, confidence rules, and moderation behavior from one protected admin control panel.
+            Configure model governance thresholds, confidence rules, and moderation behavior. Modality importance is learned by the gated fusion model.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -3037,55 +3026,22 @@ function AiModelSettingsPanel({
         <div className="rounded-[1.5rem] border border-white/10 bg-white/[0.04] p-4 md:p-5">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <h3 className="text-xl font-extrabold">Fusion Weights</h3>
-              <p className="mt-1 text-sm text-muted-foreground">Balance questionnaire, voice, and video contribution to the final wellness signal.</p>
+              <h3 className="text-xl font-extrabold">Learned Fusion</h3>
+              <p className="mt-1 text-sm text-muted-foreground">Text, audio, and video gates are learned during PHQ-8 supervised training, not configured manually.</p>
             </div>
-            <Badge
-              variant="outline"
-              className={weightsValid ? "border-primary/20 bg-primary/10 text-primary" : "border-rose-300/25 bg-rose-400/10 text-rose-100"}
-            >
-              Total {weightTotal}%
-            </Badge>
+            <Badge variant="outline" className="border-primary/20 bg-primary/10 text-primary">Gated model</Badge>
           </div>
 
-          <div className="mt-5 space-y-4">
-            <AiSettingSlider
-              label="Text questionnaire"
-              description="Current core screening input"
-              value={draft.textWeight}
-              min={0}
-              max={100}
-              suffix="%"
-              tone="from-primary to-sky-300"
-              onChange={(value) => update({ textWeight: value })}
-            />
-            <AiSettingSlider
-              label="Voice analysis"
-              description="Reserved for voice model testing"
-              value={draft.audioWeight}
-              min={0}
-              max={100}
-              suffix="%"
-              tone="from-cyan-300 to-violet-300"
-              onChange={(value) => update({ audioWeight: value })}
-            />
-            <AiSettingSlider
-              label="Video emotion"
-              description="Reserved for video model testing"
-              value={draft.videoWeight}
-              min={0}
-              max={100}
-              suffix="%"
-              tone="from-violet-300 to-fuchsia-300"
-              onChange={(value) => update({ videoWeight: value })}
-            />
-          </div>
-
-          {!weightsValid && (
-            <div className="mt-4 rounded-2xl border border-rose-300/20 bg-rose-400/10 p-3 text-sm text-rose-100">
-              Fusion weights must add up to exactly 100% before saving.
+          <div className="mt-5 grid gap-3">
+            <div className="rounded-2xl border border-white/10 bg-black/15 p-4">
+              <div className="text-xs font-extrabold uppercase tracking-[0.14em] text-primary">Training supervision</div>
+              <p className="mt-2 text-sm leading-6 text-muted-foreground">PHQ-8 score is the supervised regression target. Severity bands are derived deterministically from the predicted score.</p>
             </div>
-          )}
+            <div className="rounded-2xl border border-white/10 bg-black/15 p-4">
+              <div className="text-xs font-extrabold uppercase tracking-[0.14em] text-primary">Fusion mechanism</div>
+              <p className="mt-2 text-sm leading-6 text-muted-foreground">The Python model projects each modality into a shared embedding space and learns per-modality gates end to end.</p>
+            </div>
+          </div>
         </div>
 
         <div className="space-y-5">

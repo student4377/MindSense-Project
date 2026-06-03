@@ -48,15 +48,19 @@ export default function AnalysisDashboard({
     () => Math.random().toString(16).slice(2, 6).toUpperCase() + "-" + Math.random().toString(16).slice(2, 6).toUpperCase(),
     [],
   );
+  const phqPercent = clamp((result.phqScore / 24) * 100);
+  const confidencePercent = clamp(result.confidence * 100);
+  const audioQuality = clamp(data.audioMetrics?.qualityScore ?? 0);
+  const videoQuality = clamp(data.videoMetrics?.qualityScore ?? 0);
 
   const textIndicators = useMemo(
     () => [
-      { label: "Mood signal", value: clamp(result.textScore), color: "bg-sky-400" },
-      { label: "Sleep strain", value: clamp(result.textScore * 0.72 + 8), color: "bg-violet-400" },
-      { label: "Stress load", value: clamp(result.finalScore * 0.78 + 10), color: "bg-orange-400" },
-      { label: "Stability", value: clamp(100 - result.finalScore), color: "bg-emerald-400" },
+      { label: "PHQ severity", value: phqPercent, color: "bg-sky-400" },
+      { label: "Model confidence", value: confidencePercent, color: "bg-violet-400" },
+      { label: "Text gate", value: clamp((result.modalityDiagnostics?.gates?.text ?? 0) * 100), color: "bg-orange-400" },
+      { label: "Narrative present", value: data.textNarrative?.trim() ? 100 : 0, color: "bg-emerald-400" },
     ],
-    [result.finalScore, result.textScore],
+    [confidencePercent, data.textNarrative, phqPercent, result.modalityDiagnostics?.gates?.text],
   );
 
   const videoIndicators = useMemo(
@@ -64,10 +68,12 @@ export default function AnalysisDashboard({
       { label: "Lighting", value: clamp(((data.videoMetrics?.brightnessScore ?? 35) / 55) * 100), color: "bg-sky-400" },
       { label: "Duration", value: clamp(((data.videoMetrics?.durationSeconds ?? 0) / 20) * 100), color: "bg-violet-400" },
       { label: "File integrity", value: clamp(((data.videoMetrics?.sizeBytes ?? 0) / (420 * 1024)) * 100), color: "bg-emerald-400" },
-      { label: "Readiness", value: result.videoScore, color: "bg-orange-400" },
+      { label: "Capture quality", value: videoQuality, color: "bg-orange-400" },
     ],
-    [data.videoMetrics, result.videoScore],
+    [data.videoMetrics, videoQuality],
   );
+
+  const hasNarrative = Boolean(data.textNarrative?.trim());
 
   useEffect(() => {
     const interval = window.setInterval(() => {
@@ -144,16 +150,16 @@ export default function AnalysisDashboard({
               title="Text Analysis"
               status={activeIndex > 0 ? "Complete" : "Analyzing"}
               footerLabel="Confidence"
-              footerValue={result.confidence}
+              footerValue={confidencePercent}
             >
               <div className="grid gap-4 md:grid-cols-[minmax(0,0.95fr)_minmax(0,1fr)]">
                 <div className="rounded-xl border border-cyan-300/14 bg-slate-950/45 p-3">
                   <div className="text-xs uppercase tracking-[0.12em] text-slate-400">Input Source</div>
                   <p className="mt-2 text-sm leading-6 text-slate-200">
-                    {data.textAnswers.length} required PHQ-style responses were completed for the questionnaire signal.
+                    {data.textAnswers.length} required PHQ-style responses{hasNarrative ? " plus one written response" : ""} were completed for the questionnaire signal.
                   </p>
                 </div>
-                <GaugePanel label="Questionnaire Signal" value={result.textScore} accent="cyan" />
+                <GaugePanel label="PHQ Signal" value={phqPercent} accent="cyan" />
               </div>
               <div className="mt-4 rounded-xl border border-cyan-300/14 bg-slate-950/35 p-3">
                 <div className="text-xs uppercase tracking-[0.12em] text-slate-400">Detected indicators</div>
@@ -166,7 +172,7 @@ export default function AnalysisDashboard({
               title="Video Analysis"
               status={activeIndex > 2 ? "Complete" : activeIndex === 2 ? "Analyzing" : "Queued"}
               footerLabel="Video quality"
-              footerValue={result.videoScore}
+              footerValue={videoQuality}
             >
               <div className="grid gap-4 md:grid-cols-[12rem_minmax(0,1fr)]">
                 <div className="relative min-h-48 overflow-hidden rounded-xl border border-cyan-300/14 bg-slate-950/50">
@@ -195,9 +201,9 @@ export default function AnalysisDashboard({
           <div className="relative flex min-h-[34rem] flex-col items-center justify-center overflow-hidden rounded-[2rem] border border-cyan-300/20 bg-slate-950/35 p-5 text-center">
             <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(34,211,238,0.14),transparent_50%)]" />
             <FusionCore progress={progress} />
-            <div className="relative mt-6 text-xs font-bold uppercase tracking-[0.18em] text-cyan-300">MindSense Fusion Engine</div>
+            <div className="relative mt-6 text-xs font-bold uppercase tracking-[0.18em] text-cyan-300">MindSense Learned Fusion Engine</div>
             <p className="relative mt-2 max-w-xs text-sm leading-6 text-slate-300">
-              Integrating structured answers, voice quality, and video capture readiness into one transparent support profile.
+              Projecting text, audio, and video embeddings into a learned PHQ-8 prediction space.
             </p>
             <div className="relative mt-6 w-full max-w-sm rounded-[1.5rem] border border-cyan-300/20 bg-slate-950/70 p-4 text-left">
               <div className="mb-3 flex items-center justify-between">
@@ -224,7 +230,7 @@ export default function AnalysisDashboard({
               title="Audio Analysis"
               status={activeIndex > 1 ? "Complete" : activeIndex === 1 ? "Analyzing" : "Queued"}
               footerLabel="Audio quality"
-              footerValue={result.audioScore}
+              footerValue={audioQuality}
             >
               <div className="rounded-xl border border-cyan-300/14 bg-slate-950/45 p-3">
                 <div className="text-xs uppercase tracking-[0.12em] text-slate-400">Live waveform</div>
@@ -241,7 +247,7 @@ export default function AnalysisDashboard({
                     ]}
                   />
                 </div>
-                <GaugePanel label="Signal Quality" value={result.audioScore} accent="violet" compact />
+                <GaugePanel label="Signal Quality" value={audioQuality} accent="violet" compact />
               </div>
             </DataPanel>
 
@@ -250,17 +256,17 @@ export default function AnalysisDashboard({
               title="Wellness Report"
               status={saving ? "Saving" : activeIndex >= 4 ? "Generating" : "Queued"}
               footerLabel="Fusion confidence"
-              footerValue={result.confidence}
+              footerValue={confidencePercent}
             >
               <div className="grid gap-4 md:grid-cols-[10rem_1fr]">
-                <GaugePanel label="Support Signal" value={result.finalScore} accent="emerald" compact />
+                <GaugePanel label="PHQ Severity" value={phqPercent} accent="emerald" compact />
                 <div className="rounded-xl border border-cyan-300/14 bg-slate-950/35 p-3">
                   <FeatureRows
                     rows={[
-                      ["Depression support", result.severityLabel],
-                      ["Questionnaire", `${result.textScore}/100`],
-                      ["Audio readiness", `${result.audioScore}/100`],
-                      ["Video readiness", `${result.videoScore}/100`],
+                      ["PHQ prediction", `${result.phqScore.toFixed(1)}/24`],
+                      ["Severity band", result.severityLabel],
+                      ["Model source", result.source === "learned_model" ? result.modelVersion : "Questionnaire baseline"],
+                      ["Confidence", `${Math.round(confidencePercent)}%`],
                     ]}
                   />
                 </div>
@@ -276,9 +282,9 @@ export default function AnalysisDashboard({
           <div className="rounded-[1.5rem] border border-cyan-300/18 bg-slate-950/45 p-4">
             <div className="text-sm font-bold uppercase tracking-[0.14em] text-cyan-300">Confidence Overview</div>
             <div className="mt-4 grid grid-cols-3 gap-3">
-              <MiniDonut label="Text" value={result.confidence} color="cyan" />
-              <MiniDonut label="Audio" value={result.audioScore} color="violet" />
-              <MiniDonut label="Video" value={result.videoScore} color="emerald" />
+              <MiniDonut label="Model" value={confidencePercent} color="cyan" />
+              <MiniDonut label="Audio" value={audioQuality} color="violet" />
+              <MiniDonut label="Video" value={videoQuality} color="emerald" />
             </div>
           </div>
 

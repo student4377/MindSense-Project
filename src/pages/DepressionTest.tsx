@@ -14,17 +14,20 @@ import type { Json, Tables } from "@/integrations/supabase/types";
 import { toast } from "@/components/ui/use-toast";
 import { updateHeaderTestCache } from "@/lib/headerCache";
 import {
-  buildFusionResult,
+  buildQuestionnaireBaselineResult,
+  TEXT_NARRATIVE_PROMPT,
   type AudioSignalMetrics,
   type FusionResult,
   type ScreeningAnswer,
   type VideoSignalMetrics,
 } from "@/lib/depressionAnalysis";
+import { getAssessmentPrediction } from "@/lib/modelPrediction";
 
 export type Phase = "intro" | "text" | "voice" | "video" | "analysis" | "result";
 
 export type TestData = {
   textAnswers: ScreeningAnswer[];
+  textNarrative?: string;
   voicePath?: string;
   videoPath?: string;
   audioMetrics?: AudioSignalMetrics;
@@ -42,6 +45,21 @@ const phaseMeta: Record<Phase, { label: string; short: string; icon: typeof Spar
   video: { label: "Video Emotion Capture", short: "Video", icon: Video },
   analysis: { label: "Multimodal Fusion", short: "Fusion", icon: Activity },
   result: { label: "Wellness Report", short: "Report", icon: CheckCircle2 },
+};
+
+const buildTextAnswersPayload = (answers: ScreeningAnswer[], narrative?: string): Json => {
+  const trimmedNarrative = narrative?.trim();
+  if (!trimmedNarrative) return answers as unknown as Json;
+
+  return [
+    ...answers,
+    {
+      id: "open_narrative",
+      type: "open_text",
+      question: TEXT_NARRATIVE_PROMPT,
+      answer: trimmedNarrative,
+    },
+  ] as unknown as Json;
 };
 
 export default function DepressionTest() {
@@ -78,7 +96,7 @@ export default function DepressionTest() {
       .from("depression_tests")
       .insert({
         user_id: user.id,
-        text_answers: data.textAnswers as unknown as Json,
+        text_answers: buildTextAnswersPayload(data.textAnswers, data.textNarrative),
         voice_path: data.voicePath,
         video_path: data.videoPath,
         status: "completed",
@@ -98,12 +116,47 @@ export default function DepressionTest() {
 
     updateHeaderTestCache(user.id, savedTest as DepressionTestRow);
 
+    const { error: predictionError } = await supabase.from("model_predictions").insert({
+      assessment_id: savedTest.id,
+      user_id: user.id,
+      phq_score: analysisResult.phqScore,
+      severity: analysisResult.severity,
+      confidence: analysisResult.confidence,
+      prediction_source: analysisResult.source,
+      model_version: analysisResult.modelVersion,
+      modality_gates: (analysisResult.modalityDiagnostics?.gates ?? {}) as unknown as Json,
+      modality_outputs: {
+        audioQuality: data.audioMetrics.qualityScore,
+        videoQuality: data.videoMetrics.qualityScore,
+        textItems: data.textAnswers.length,
+        hasNarrative: Boolean(data.textNarrative?.trim()),
+      } as unknown as Json,
+      explanation: analysisResult.observations[0] ?? null,
+      raw_prediction: analysisResult as unknown as Json,
+    });
+
+    if (predictionError) {
+      toast({
+        title: "Prediction saved with limited detail",
+        description: predictionError.message,
+      });
+    }
+
     const { error: resultError } = await supabase.from("results").insert({
       user_id: user.id,
-      text_sentiment: `Questionnaire support signal ${analysisResult.textScore}/100`,
-      voice_emotion: `Voice signal ${analysisResult.audioScore}/100`,
-      face_emotion: `Video signal ${analysisResult.videoScore}/100`,
-      depression_level: analysisResult.severityLabel,
+      text_sentiment:
+        analysisResult.source === "learned_model"
+          ? `Learned text encoder processed open response and questionnaire context`
+          : `Questionnaire PHQ signal ${analysisResult.phqScore.toFixed(1)}/24`,
+      voice_emotion:
+        analysisResult.source === "learned_model"
+          ? "Learned audio encoder processed uploaded voice sample"
+          : "Voice sample captured for learned audio encoder",
+      face_emotion:
+        analysisResult.source === "learned_model"
+          ? "Learned visual encoder processed uploaded video sample"
+          : "Video sample captured for learned visual encoder",
+      depression_level: `${analysisResult.severityLabel} (PHQ ${analysisResult.phqScore.toFixed(1)}/24)`,
       recommendation: analysisResult.recommendation,
     });
 
@@ -115,7 +168,7 @@ export default function DepressionTest() {
     }
 
     go("result");
-  }, [analysisResult, data.audioMetrics, data.textAnswers, data.videoMetrics, data.videoPath, data.voicePath, go, user]);
+  }, [analysisResult, data.audioMetrics, data.textAnswers, data.textNarrative, data.videoMetrics, data.videoPath, data.voicePath, go, user]);
 
   return (
     <DashboardLayout>
@@ -134,7 +187,7 @@ export default function DepressionTest() {
                 <span className="block gradient-text">guided with care.</span>
               </h1>
               <p className="mt-5 max-w-3xl text-base leading-7 text-muted-foreground md:text-lg">
-                Complete all three required inputs: questionnaire, 20-second voice, and 20-second video. The final report uses a 50/25/25 fusion.
+                Complete all three required inputs: questionnaire, 20-second voice, and 20-second video. The trained model predicts PHQ-8 severity through learned multimodal fusion.
               </p>
 
               <div className="mt-7">
@@ -203,8 +256,8 @@ export default function DepressionTest() {
             {phase === "intro" && <Instructions onStart={() => go("text")} />}
             {phase === "text" && (
               <TextTest
-                onComplete={(answers) => {
-                  setData((current) => ({ ...current, textAnswers: answers }));
+                onComplete={(answers, narrative) => {
+                  setData((current) => ({ ...current, textAnswers: answers, textNarrative: narrative }));
                   go("voice");
                 }}
               />
@@ -219,8 +272,8 @@ export default function DepressionTest() {
             )}
             {phase === "video" && (
               <VideoTest
-                onComplete={(path, metrics) => {
-                  if (!data.audioMetrics) {
+                onComplete={async (path, metrics) => {
+                  if (!user || !data.audioMetrics) {
                     toast({
                       title: "Voice signal missing",
                       description: "Please complete the voice step again before video analysis.",
@@ -231,7 +284,35 @@ export default function DepressionTest() {
                   }
 
                   const nextData = { ...data, videoPath: path, videoMetrics: metrics };
-                  const nextResult = buildFusionResult(nextData.textAnswers, data.audioMetrics, metrics);
+                  const { data: sessionData } = await supabase.auth.getSession();
+                  let nextResult: FusionResult;
+
+                  try {
+                    nextResult = await getAssessmentPrediction(
+                      {
+                        userId: user.id,
+                        textAnswers: nextData.textAnswers,
+                        textNarrative: nextData.textNarrative,
+                        voicePath: nextData.voicePath || "",
+                        videoPath: path,
+                        audioMetrics: data.audioMetrics,
+                        videoMetrics: metrics,
+                      },
+                      sessionData.session?.access_token,
+                    );
+                  } catch (predictionError) {
+                    const message = predictionError instanceof Error ? predictionError.message : "Model prediction failed.";
+                    toast({
+                      title: "Using questionnaire baseline",
+                      description: `${message} The trained model service can be connected through VITE_ML_API_URL.`,
+                    });
+                    nextResult = buildQuestionnaireBaselineResult(nextData.textAnswers, {
+                      hasNarrative: Boolean(nextData.textNarrative?.trim()),
+                      audioPassed: data.audioMetrics.passed,
+                      videoPassed: metrics.passed,
+                    });
+                  }
+
                   setData(nextData);
                   setAnalysisResult(nextResult);
                   saveStartedRef.current = false;
@@ -248,7 +329,7 @@ export default function DepressionTest() {
                   data={data}
                   result={analysisResult}
                   onRetake={() => {
-                    setData({ textAnswers: [] });
+                    setData({ textAnswers: [], textNarrative: "" });
                     setAnalysisResult(null);
                     saveStartedRef.current = false;
                     go("intro");

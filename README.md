@@ -17,9 +17,12 @@ Create `.env` from `.env.example` and fill in the values from Supabase Project S
 VITE_SUPABASE_PROJECT_ID="your-project-ref"
 VITE_SUPABASE_URL="https://your-project-ref.supabase.co"
 VITE_SUPABASE_PUBLISHABLE_KEY="your-publishable-or-anon-key"
+VITE_ML_API_URL="http://127.0.0.1:8000"
 ```
 
 Use the publishable or anon key only. Do not put a Supabase service role key in frontend environment variables.
+
+`VITE_ML_API_URL` is optional during normal frontend development. If it is omitted, the depression test uses a questionnaire-only PHQ baseline while the learned Python model service is not running.
 
 ## Run Locally
 
@@ -55,3 +58,22 @@ npx supabase migration list --linked
 ```
 
 The local Supabase project ref is stored in `supabase/config.toml`. Keep it aligned with `VITE_SUPABASE_PROJECT_ID`.
+
+## Learned Multimodal Model
+
+Training code lives in `ml/`. Keep DAIC-WOZ data outside this repo and train from a participant-level manifest:
+
+```text
+participant_id,split,phq_score,transcript_path,audio_features_path,video_features_path
+```
+
+The model predicts continuous PHQ-8 score with learned gated fusion over text, audio, and video encoders. The old fixed 50/25/25-style fusion is not used in the assessment flow.
+
+```powershell
+cd ml
+python -m venv .venv
+.venv\Scripts\activate
+pip install -r requirements.txt
+python train.py --manifest C:\Users\shahrukh\Desktop\Model_Training\manifest.csv --output-dir runs\mindsense-mm-v1
+python predict_api.py --checkpoint runs\mindsense-mm-v1\best_model.pt
+```

@@ -158,6 +158,62 @@ export type Database = {
         }
         Relationships: []
       }
+      model_predictions: {
+        Row: {
+          assessment_id: string
+          confidence: number
+          created_at: string
+          explanation: string | null
+          id: string
+          modality_gates: Json
+          modality_outputs: Json
+          model_version: string
+          phq_score: number
+          prediction_source: string
+          raw_prediction: Json
+          severity: string
+          user_id: string
+        }
+        Insert: {
+          assessment_id: string
+          confidence: number
+          created_at?: string
+          explanation?: string | null
+          id?: string
+          modality_gates?: Json
+          modality_outputs?: Json
+          model_version: string
+          phq_score: number
+          prediction_source: string
+          raw_prediction?: Json
+          severity: string
+          user_id: string
+        }
+        Update: {
+          assessment_id?: string
+          confidence?: number
+          created_at?: string
+          explanation?: string | null
+          id?: string
+          modality_gates?: Json
+          modality_outputs?: Json
+          model_version?: string
+          phq_score?: number
+          prediction_source?: string
+          raw_prediction?: Json
+          severity?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "model_predictions_assessment_id_fkey"
+            columns: ["assessment_id"]
+            isOneToOne: false
+            referencedRelation: "depression_tests"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       logs: {
         Row: {
           action: string | null
