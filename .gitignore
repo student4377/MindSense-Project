@@ -11,6 +11,13 @@ node_modules
 dist
 dist-ssr
 supabase/.temp
+.venv
+ml/.venv
+ml/runs
+ml/artifacts/**/*.pt
+ml/artifacts/**/*.bin
+__pycache__/
+*.py[cod]
 *.local
 .env
 .env.*

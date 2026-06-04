@@ -43,17 +43,38 @@ python -m venv .venv
 pip install -r requirements.txt
 ```
 
+Build manifest:
+
+```bash
+python build_manifest.py --data-root C:\Users\shahrukh\Desktop\Model_Training --output C:\Users\shahrukh\Desktop\Model_Training\manifest.csv
+```
+
 Train:
 
 ```bash
-python train.py --manifest C:\Users\shahrukh\Desktop\Model_Training\manifest.csv --output-dir runs\mindsense-mm-v1
+python precompute_features.py --manifest C:\Users\shahrukh\Desktop\Model_Training\manifest.csv --cache-dir C:\Users\shahrukh\Desktop\Model_Training\feature_cache_roberta --output-manifest C:\Users\shahrukh\Desktop\Model_Training\manifest_cached_roberta.csv --normalizers-output C:\Users\shahrukh\Desktop\Model_Training\feature_normalizers_roberta.json --use-mfcc
+python train.py --manifest C:\Users\shahrukh\Desktop\Model_Training\manifest_cached_roberta.csv --normalizer-path C:\Users\shahrukh\Desktop\Model_Training\feature_normalizers_roberta.json --output-dir runs\mindsense-mm-v1 --text-model roberta-base --fusion-type gated --use-mfcc
+```
+
+Colab:
+
+```text
+See COLAB_GUIDE.md and colab_mindsense_training.py.
 ```
 
 Run API:
 
 ```bash
-python predict_api.py --checkpoint runs\mindsense-mm-v1\best_model.pt
+python predict_api.py
 ```
+
+By default this loads:
+
+```text
+artifacts/mindsense_roberta_gated_tuned_v2/best_model.pt
+```
+
+Use `--checkpoint path\to\best_model.pt` to run a different checkpoint.
 
 Then set in the website `.env`:
 

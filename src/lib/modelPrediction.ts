@@ -15,6 +15,11 @@ export type ModelPredictionRequest = {
   textNarrative?: string;
   voicePath: string;
   videoPath: string;
+  audioFeaturesPath?: string;
+  audioMfccPath?: string;
+  videoFeaturesPath?: string;
+  audioCachePath?: string;
+  videoCachePath?: string;
   audioMetrics: AudioSignalMetrics;
   videoMetrics: VideoSignalMetrics;
 };
@@ -39,6 +44,21 @@ type ApiModelPrediction = {
 };
 
 const mlApiUrl = () => import.meta.env.VITE_ML_API_URL?.replace(/\/$/, "");
+
+const apiErrorMessage = async (response: Response) => {
+  try {
+    const payload = await response.json();
+    const detail = payload?.detail;
+    if (detail?.code === "FEATURE_EXTRACTION_REQUIRED") {
+      return "The trained model is loaded, but browser recordings still need OpenSMILE/OpenFace feature extraction before learned-model inference.";
+    }
+    if (typeof detail === "string") return detail;
+    if (detail?.message) return String(detail.message);
+  } catch {
+    // Fall through to generic message.
+  }
+  return `Model API returned ${response.status}`;
+};
 
 const normalizeConfidence = (value: number | undefined) => {
   if (!Number.isFinite(value)) return 0.5;
@@ -105,13 +125,18 @@ export const getAssessmentPrediction = async (
       text_narrative: request.textNarrative || "",
       voice_path: request.voicePath,
       video_path: request.videoPath,
+      audio_features_path: request.audioFeaturesPath,
+      audio_mfcc_path: request.audioMfccPath,
+      video_features_path: request.videoFeaturesPath,
+      audio_cache_path: request.audioCachePath,
+      video_cache_path: request.videoCachePath,
       audio_quality: request.audioMetrics,
       video_quality: request.videoMetrics,
     }),
   });
 
   if (!response.ok) {
-    throw new Error(`Model API returned ${response.status}`);
+    throw new Error(await apiErrorMessage(response));
   }
 
   return toFusionResult((await response.json()) as ApiModelPrediction);

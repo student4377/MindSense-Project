@@ -74,6 +74,22 @@ cd ml
 python -m venv .venv
 .venv\Scripts\activate
 pip install -r requirements.txt
-python train.py --manifest C:\Users\shahrukh\Desktop\Model_Training\manifest.csv --output-dir runs\mindsense-mm-v1
-python predict_api.py --checkpoint runs\mindsense-mm-v1\best_model.pt
+python predict_api.py
 ```
+
+The selected local artifact is:
+
+```text
+ml/artifacts/mindsense_roberta_gated_tuned_v2/best_model.pt
+```
+
+It was selected after comparing gated fusion, cross-modal fusion, tuned gated fusion, and text-only baseline runs. Current test metrics:
+
+```text
+MAE: 5.396
+RMSE: 6.654
+F1 macro: 0.124
+Correlation: 0.064
+```
+
+The trained API requires OpenSMILE audio features and OpenFace video features. Browser `.webm` recordings must be converted into those feature files before true learned-model inference. Until that feature extraction service is connected, the website falls back to the questionnaire PHQ baseline when `/predict` reports `FEATURE_EXTRACTION_REQUIRED`.
