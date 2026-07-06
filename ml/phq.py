@@ -7,13 +7,13 @@ SEVERITY_LABELS = ["Minimal", "Mild", "Moderate", "Moderately Severe", "Severe"]
 
 
 def interpret_phq(score: float) -> str:
-    if 0 <= score <= 4:
+    if score < 5:
         return "Minimal"
-    if 5 <= score <= 9:
+    if score < 10:
         return "Mild"
-    if 10 <= score <= 14:
+    if score < 15:
         return "Moderate"
-    if 15 <= score <= 19:
+    if score < 20:
         return "Moderately Severe"
     return "Severe"
 

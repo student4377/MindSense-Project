@@ -8,6 +8,7 @@ import {
   type ScreeningAnswer,
   type VideoSignalMetrics,
 } from "@/lib/depressionAnalysis";
+import { supabase } from "@/integrations/supabase/client";
 
 export type ModelPredictionRequest = {
   userId: string;
@@ -51,6 +52,11 @@ const apiErrorMessage = async (response: Response) => {
     const detail = payload?.detail;
     if (detail?.code === "FEATURE_EXTRACTION_REQUIRED") {
       return "The trained model is loaded, but browser recordings still need OpenSMILE/OpenFace feature extraction before learned-model inference.";
+    }
+    if (detail?.code === "MEDIA_FEATURE_EXTRACTION_FAILED") {
+      return detail?.message
+        ? `Media feature extraction failed: ${detail.message}`
+        : "Media feature extraction failed before learned-model inference.";
     }
     if (typeof detail === "string") return detail;
     if (detail?.message) return String(detail.message);
@@ -100,6 +106,14 @@ const toFusionResult = (prediction: ApiModelPrediction): FusionResult => {
   };
 };
 
+const createMediaSignedUrl = async (path: string, label: "voice" | "video") => {
+  const { data, error } = await supabase.storage.from("test-media").createSignedUrl(path, 10 * 60);
+  if (error || !data?.signedUrl) {
+    throw new Error(`Could not create secure ${label} media URL for model analysis.`);
+  }
+  return data.signedUrl;
+};
+
 export const getAssessmentPrediction = async (
   request: ModelPredictionRequest,
   accessToken?: string | null,
@@ -113,27 +127,41 @@ export const getAssessmentPrediction = async (
     });
   }
 
-  const response = await fetch(`${baseUrl}/predict`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
-    },
-    body: JSON.stringify({
-      user_id: request.userId,
-      text_answers: request.textAnswers,
-      text_narrative: request.textNarrative || "",
-      voice_path: request.voicePath,
-      video_path: request.videoPath,
-      audio_features_path: request.audioFeaturesPath,
-      audio_mfcc_path: request.audioMfccPath,
-      video_features_path: request.videoFeaturesPath,
-      audio_cache_path: request.audioCachePath,
-      video_cache_path: request.videoCachePath,
-      audio_quality: request.audioMetrics,
-      video_quality: request.videoMetrics,
-    }),
-  });
+  const hasAudioFeatures = Boolean(request.audioFeaturesPath || request.audioCachePath);
+  const hasVideoFeatures = Boolean(request.videoFeaturesPath || request.videoCachePath);
+  const hasPrecomputedFeatures = hasAudioFeatures && hasVideoFeatures;
+  const voiceUrl = hasPrecomputedFeatures ? undefined : await createMediaSignedUrl(request.voicePath, "voice");
+  const videoUrl = hasPrecomputedFeatures ? undefined : await createMediaSignedUrl(request.videoPath, "video");
+
+  let response: Response;
+  try {
+    response = await fetch(`${baseUrl}${hasPrecomputedFeatures ? "/predict" : "/predict-from-media"}`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+      },
+      body: JSON.stringify({
+        user_id: request.userId,
+        text_answers: request.textAnswers,
+        text_narrative: request.textNarrative || "",
+        voice_path: request.voicePath,
+        video_path: request.videoPath,
+        voice_url: voiceUrl,
+        video_url: videoUrl,
+        audio_features_path: request.audioFeaturesPath,
+        audio_mfcc_path: request.audioMfccPath,
+        video_features_path: request.videoFeaturesPath,
+        audio_cache_path: request.audioCachePath,
+        video_cache_path: request.videoCachePath,
+        audio_quality: request.audioMetrics,
+        video_quality: request.videoMetrics,
+      }),
+    });
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : "Network request failed.";
+    throw new Error(`Cannot reach the MindSense ML API at ${baseUrl}. Keep the ML API running and open the local website URL. Browser detail: ${detail}`);
+  }
 
   if (!response.ok) {
     throw new Error(await apiErrorMessage(response));

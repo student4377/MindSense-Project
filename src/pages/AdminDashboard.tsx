@@ -3005,7 +3005,7 @@ function AiModelSettingsPanel({
         <div>
           <h2 className="flex items-center gap-2 text-2xl font-extrabold">
             <SlidersHorizontal className="h-5 w-5 text-primary" />
-            AI Model Settings
+            AI Governance Settings
           </h2>
           <p className="mt-1 max-w-3xl text-sm leading-6 text-muted-foreground">
             Configure model governance thresholds, confidence rules, and moderation behavior. Modality importance is learned by the gated fusion model.
@@ -3027,7 +3027,7 @@ function AiModelSettingsPanel({
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <h3 className="text-xl font-extrabold">Learned Fusion</h3>
-              <p className="mt-1 text-sm text-muted-foreground">Text, audio, and video gates are learned during PHQ-8 supervised training, not configured manually.</p>
+              <p className="mt-1 text-sm text-muted-foreground">Text, audio, and video gates are learned during PHQ-8 supervised training. Manual modality weights are hidden because they do not control learned-model inference.</p>
             </div>
             <Badge variant="outline" className="border-primary/20 bg-primary/10 text-primary">Gated model</Badge>
           </div>
@@ -3039,7 +3039,7 @@ function AiModelSettingsPanel({
             </div>
             <div className="rounded-2xl border border-white/10 bg-black/15 p-4">
               <div className="text-xs font-extrabold uppercase tracking-[0.14em] text-primary">Fusion mechanism</div>
-              <p className="mt-2 text-sm leading-6 text-muted-foreground">The Python model projects each modality into a shared embedding space and learns per-modality gates end to end.</p>
+              <p className="mt-2 text-sm leading-6 text-muted-foreground">The Python model projects each modality into a shared embedding space and learns per-modality gates end to end. Admin controls below only affect review thresholds and safety presentation.</p>
             </div>
           </div>
         </div>
@@ -3133,7 +3133,7 @@ function AiModelSettingsPanel({
           <Button variant="outline" className="rounded-full border-white/10 bg-white/[0.04]" onClick={onReset} disabled={saving || loading}>
             Reset Defaults
           </Button>
-          <Button className="premium-button" onClick={onSave} disabled={saving || loading || !weightsValid || !thresholdsValid}>
+          <Button className="premium-button" onClick={onSave} disabled={saving || loading || !thresholdsValid}>
             {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
             {saving ? "Saving" : "Save Settings"}
           </Button>

@@ -72,10 +72,10 @@ export const phqScoreFromAnswers = (answers: ScreeningAnswer[]) =>
 
 export const interpretPhqSeverity = (score: number): DepressionSeverity => {
   const phq = clampPhq(score);
-  if (phq <= 4) return "minimal";
-  if (phq <= 9) return "mild";
-  if (phq <= 14) return "moderate";
-  if (phq <= 19) return "moderately_severe";
+  if (phq < 5) return "minimal";
+  if (phq < 10) return "mild";
+  if (phq < 15) return "moderate";
+  if (phq < 20) return "moderately_severe";
   return "severe";
 };
 

@@ -1,55 +1,88 @@
-# MindSense Colab Training Runner
-#
-# Open this file in Google Colab or copy each cell into a notebook.
-# Recommended Google Drive layout:
-#
-# /content/drive/MyDrive/MindSenseProject/ml
-# /content/drive/MyDrive/MindSenseData/Text
-# /content/drive/MyDrive/MindSenseData/Audio
-# /content/drive/MyDrive/MindSenseData/Video
-# /content/drive/MyDrive/MindSenseData/manifest.csv
-#
-# The `ml` folder should be this project's ml folder.
+from __future__ import annotations
 
-# %%
-from google.colab import drive
-drive.mount("/content/drive")
-
-# %%
-!nvidia-smi
-
-# %%
-!pip -q install fastapi "uvicorn[standard]" pydantic numpy pandas scikit-learn torch transformers tqdm
-
-# %%
+import json
 import os
-import sys
 import subprocess
+import sys
 from pathlib import Path
 
-PROJECT_ROOT = Path("/content/drive/MyDrive/MindSenseProject")
-DATA_ROOT = Path("/content/drive/MyDrive/MindSenseData")
+
+"""
+MindSense Colab training runner.
+
+Use this file from Google Colab or run it as a normal Python script after
+mounting Google Drive. Dataset files should stay outside the app repository.
+
+Recommended Drive layout:
+  /content/drive/MyDrive/MindSenseProject/ml
+  /content/drive/MyDrive/MindSenseData/Text
+  /content/drive/MyDrive/MindSenseData/Audio
+  /content/drive/MyDrive/MindSenseData/Video
+  /content/drive/MyDrive/MindSenseData/manifest.csv
+"""
+
+
+PROJECT_ROOT = Path(os.environ.get("MINDSENSE_COLAB_PROJECT_ROOT", "/content/drive/MyDrive/MindSenseProject"))
+DATA_ROOT = Path(os.environ.get("MINDSENSE_COLAB_DATA_ROOT", "/content/drive/MyDrive/MindSenseData"))
 ML_DIR = PROJECT_ROOT / "ml"
 MANIFEST = DATA_ROOT / "manifest.csv"
 CACHE_DIR = DATA_ROOT / "feature_cache_roberta"
 CACHED_MANIFEST = DATA_ROOT / "manifest_cached_roberta.csv"
 NORMALIZERS = DATA_ROOT / "feature_normalizers_roberta.json"
 
-sys.path.insert(0, str(ML_DIR))
-print("ML dir:", ML_DIR)
-print("Manifest:", MANIFEST)
-print("Manifest exists:", MANIFEST.exists())
 
-# %%
-# If you uploaded the compact package, cached features are already present.
-# If you uploaded raw Audio/Video CSV folders instead, this cell rebuilds the cache once.
-if CACHED_MANIFEST.exists() and NORMALIZERS.exists():
-    print("Using existing cached manifest and normalizers.")
-else:
-    subprocess.run(["python", str(ML_DIR / "build_manifest.py"), "--data-root", str(DATA_ROOT), "--output", str(MANIFEST)], check=True)
-    subprocess.run(
+def run_command(command: list[str], check: bool = True) -> None:
+    print(">", " ".join(command))
+    subprocess.run(command, check=check)
+
+
+def mount_drive_if_colab() -> None:
+    try:
+        from google.colab import drive  # type: ignore
+    except ImportError:
+        print("Google Colab is not available; assuming Drive is already mounted or paths are local.")
+        return
+    drive.mount("/content/drive")
+
+
+def install_dependencies() -> None:
+    run_command(
         [
-            "python",
+            sys.executable,
+            "-m",
+            "pip",
+            "install",
+            "-q",
+            "fastapi",
+            "uvicorn[standard]",
+            "pydantic",
+            "numpy",
+            "pandas",
+            "scikit-learn",
+            "torch",
+            "transformers",
+            "tqdm",
+        ]
+    )
+
+
+def print_environment() -> None:
+    run_command(["nvidia-smi"], check=False)
+    sys.path.insert(0, str(ML_DIR))
+    print("ML dir:", ML_DIR)
+    print("Manifest:", MANIFEST)
+    print("Manifest exists:", MANIFEST.exists())
+
+
+def prepare_manifest_cache() -> None:
+    if CACHED_MANIFEST.exists() and NORMALIZERS.exists():
+        print("Using existing cached manifest and normalizers.")
+        return
+
+    run_command([sys.executable, str(ML_DIR / "build_manifest.py"), "--data-root", str(DATA_ROOT), "--output", str(MANIFEST)])
+    run_command(
+        [
+            sys.executable,
             str(ML_DIR / "precompute_features.py"),
             "--manifest",
             str(MANIFEST),
@@ -64,113 +97,140 @@ else:
             "600",
             "--max-video-frames",
             "300",
-        ],
-        check=True,
+        ]
     )
 
-# %%
-# Model A: RoBERTa + OpenSMILE/eGeMAPS+MFCC + OpenFace -> Gated Fusion -> PHQ
-GATED_OUTPUT = ML_DIR / "runs" / "mindsense_roberta_gated"
-!python "{ML_DIR / 'train.py'}" \
-  --manifest "{CACHED_MANIFEST}" \
-  --output-dir "{GATED_OUTPUT}" \
-  --normalizer-path "{NORMALIZERS}" \
-  --text-model roberta-base \
-  --fusion-type gated \
-  --use-mfcc \
-  --mixed-precision \
-  --max-text-tokens 256 \
-  --max-audio-frames 600 \
-  --max-video-frames 300 \
-  --fusion-dim 256 \
-  --batch-size 4 \
-  --epochs 30 \
-  --patience 6 \
-  --lr 2e-4 \
-  --classification-lambda 0.25
 
-# %%
-# Model B: same encoders -> Cross-modal Transformer Fusion -> PHQ
-CROSS_OUTPUT = ML_DIR / "runs" / "mindsense_roberta_cross_modal"
-!python "{ML_DIR / 'train.py'}" \
-  --manifest "{CACHED_MANIFEST}" \
-  --output-dir "{CROSS_OUTPUT}" \
-  --normalizer-path "{NORMALIZERS}" \
-  --text-model roberta-base \
-  --fusion-type cross_modal \
-  --use-mfcc \
-  --mixed-precision \
-  --max-text-tokens 256 \
-  --max-audio-frames 600 \
-  --max-video-frames 300 \
-  --fusion-dim 256 \
-  --batch-size 4 \
-  --epochs 30 \
-  --patience 6 \
-  --lr 2e-4 \
-  --classification-lambda 0.25
+def train_model(output_dir: Path, fusion_type: str, extra_args: list[str] | None = None) -> None:
+    command = [
+        sys.executable,
+        str(ML_DIR / "train.py"),
+        "--manifest",
+        str(CACHED_MANIFEST),
+        "--output-dir",
+        str(output_dir),
+        "--normalizer-path",
+        str(NORMALIZERS),
+        "--text-model",
+        "roberta-base",
+        "--fusion-type",
+        fusion_type,
+        "--use-mfcc",
+        "--mixed-precision",
+        "--max-text-tokens",
+        "256",
+        "--max-audio-frames",
+        "600",
+        "--max-video-frames",
+        "300",
+        "--fusion-dim",
+        "256",
+        "--batch-size",
+        "4",
+        "--epochs",
+        "30",
+        "--patience",
+        "6",
+        "--lr",
+        "2e-4",
+        "--classification-lambda",
+        "0.25",
+    ]
+    if extra_args:
+        command.extend(extra_args)
+    run_command(command)
 
-# %%
-# Phase 2 optional fine-tuning: unfreeze last 2 RoBERTa layers.
-# Run this only after Model A/B baseline works and you have time/GPU budget.
-FINE_TUNE_OUTPUT = ML_DIR / "runs" / "mindsense_roberta_cross_modal_ft2"
-!python "{ML_DIR / 'train.py'}" \
-  --manifest "{CACHED_MANIFEST}" \
-  --output-dir "{FINE_TUNE_OUTPUT}" \
-  --normalizer-path "{NORMALIZERS}" \
-  --text-model roberta-base \
-  --fusion-type cross_modal \
-  --use-mfcc \
-  --mixed-precision \
-  --finetune-text \
-  --unfreeze-last-text-layers 2 \
-  --max-text-tokens 256 \
-  --max-audio-frames 600 \
-  --max-video-frames 300 \
-  --fusion-dim 256 \
-  --batch-size 2 \
-  --epochs 15 \
-  --patience 4 \
-  --lr 5e-5 \
-  --classification-lambda 0.25
 
-# %%
-# V2 accuracy experiment: chunked full-transcript RoBERTa + gated fusion.
-# This is intended to beat the current best test MAE 5.396.
-CHUNKED_V2_OUTPUT = ML_DIR / "runs" / "mindsense_roberta_gated_chunked_v2"
-!python "{ML_DIR / 'train_chunked_v2.py'}" \
-  --manifest "{CACHED_MANIFEST}" \
-  --output-dir "{CHUNKED_V2_OUTPUT}" \
-  --normalizer-path "{NORMALIZERS}" \
-  --text-model roberta-base \
-  --fusion-type gated \
-  --use-mfcc \
-  --balanced-sampler \
-  --mixed-precision \
-  --max-text-tokens 192 \
-  --max-text-chunks 12 \
-  --max-audio-frames 600 \
-  --max-video-frames 300 \
-  --fusion-dim 128 \
-  --dropout 0.4 \
-  --batch-size 2 \
-  --epochs 50 \
-  --patience 10 \
-  --lr 3e-5 \
-  --huber-beta 0.5 \
-  --classification-lambda 0.1
+def train_chunked_v2(output_dir: Path) -> None:
+    run_command(
+        [
+            sys.executable,
+            str(ML_DIR / "train_chunked_v2.py"),
+            "--manifest",
+            str(CACHED_MANIFEST),
+            "--output-dir",
+            str(output_dir),
+            "--normalizer-path",
+            str(NORMALIZERS),
+            "--text-model",
+            "roberta-base",
+            "--fusion-type",
+            "gated",
+            "--use-mfcc",
+            "--balanced-sampler",
+            "--mixed-precision",
+            "--max-text-tokens",
+            "192",
+            "--max-text-chunks",
+            "12",
+            "--max-audio-frames",
+            "600",
+            "--max-video-frames",
+            "300",
+            "--fusion-dim",
+            "128",
+            "--dropout",
+            "0.4",
+            "--batch-size",
+            "2",
+            "--epochs",
+            "50",
+            "--patience",
+            "10",
+            "--lr",
+            "3e-5",
+            "--huber-beta",
+            "0.5",
+            "--classification-lambda",
+            "0.1",
+        ]
+    )
 
-# %%
-import json
 
-for name, output in {
-    "gated": GATED_OUTPUT,
-    "cross_modal": CROSS_OUTPUT,
-    "cross_modal_ft2": FINE_TUNE_OUTPUT,
-    "chunked_v2": CHUNKED_V2_OUTPUT,
-}.items():
-    metrics_path = output / "test_metrics.json"
-    if metrics_path.exists():
-        print(name, json.loads(metrics_path.read_text()))
-    else:
-        print(name, "not run yet")
+def print_metrics(outputs: dict[str, Path]) -> None:
+    for name, output in outputs.items():
+        metrics_path = output / "test_metrics.json"
+        if metrics_path.exists():
+            print(name, json.loads(metrics_path.read_text(encoding="utf-8")))
+        else:
+            print(name, "not run yet")
+
+
+def main() -> None:
+    mount_drive_if_colab()
+    install_dependencies()
+    print_environment()
+    prepare_manifest_cache()
+
+    outputs = {
+        "gated": ML_DIR / "runs" / "mindsense_roberta_gated",
+        "cross_modal": ML_DIR / "runs" / "mindsense_roberta_cross_modal",
+        "cross_modal_ft2": ML_DIR / "runs" / "mindsense_roberta_cross_modal_ft2",
+        "chunked_v2": ML_DIR / "runs" / "mindsense_roberta_gated_chunked_v2",
+    }
+
+    train_model(outputs["gated"], "gated")
+    train_model(outputs["cross_modal"], "cross_modal")
+    train_model(
+        outputs["cross_modal_ft2"],
+        "cross_modal",
+        [
+            "--finetune-text",
+            "--unfreeze-last-text-layers",
+            "2",
+            "--batch-size",
+            "2",
+            "--epochs",
+            "15",
+            "--patience",
+            "4",
+            "--lr",
+            "5e-5",
+        ],
+    )
+    train_chunked_v2(outputs["chunked_v2"])
+    print_metrics(outputs)
+
+
+if __name__ == "__main__":
+    main()

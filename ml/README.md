@@ -43,6 +43,49 @@ python -m venv .venv
 pip install -r requirements.txt
 ```
 
+Media extraction tools:
+
+```powershell
+winget install --id Gyan.FFmpeg -e --accept-package-agreements --accept-source-agreements
+```
+
+OpenFace is installed as a Windows binary outside the repo:
+
+```text
+C:\Tools\OpenFace\FeatureExtraction.exe
+```
+
+If you install it somewhere else, set:
+
+```powershell
+$env:MINDSENSE_OPENFACE_BIN="C:\path\to\FeatureExtraction.exe"
+$env:MINDSENSE_FFMPEG_BIN="C:\path\to\ffmpeg.exe"
+```
+
+Media API safety controls:
+
+```powershell
+$env:MINDSENSE_MAX_MEDIA_BYTES="104857600"
+$env:MINDSENSE_MEDIA_DOWNLOAD_TIMEOUT_SECONDS="30"
+$env:MINDSENSE_MEDIA_COMMAND_TIMEOUT_SECONDS="180"
+```
+
+Local media paths are blocked by default for `/predict-from-media`. Enable only for trusted local testing:
+
+```powershell
+$env:MINDSENSE_ALLOW_LOCAL_MEDIA_PATHS="true"
+```
+
+Multilingual audio transcript support:
+
+```powershell
+$env:MINDSENSE_ENABLE_AUDIO_TRANSCRIPT="true"
+$env:MINDSENSE_WHISPER_MODEL="base"
+$env:MINDSENSE_WHISPER_TASK="translate"
+```
+
+When enabled and `faster-whisper` is installed, `/predict-from-media` converts the browser audio to WAV, extracts acoustic OpenSMILE/librosa features, and also creates an English speech transcript. Urdu and English speech are auto-detected by Whisper; with `MINDSENSE_WHISPER_TASK=translate`, Urdu speech is translated into English before being appended to the text context used by the existing RoBERTa encoder. If Whisper is unavailable, learned audio/video inference still runs using acoustic features only.
+
 Build manifest:
 
 ```bash
@@ -82,4 +125,4 @@ Then set in the website `.env`:
 VITE_ML_API_URL=http://127.0.0.1:8000
 ```
 
-Note: the API scaffold supports the model contract now. Raw browser `.webm` feature extraction must use the same extraction process as training, such as OpenSMILE for audio and OpenFace for video, before production use.
+The website sends Supabase signed URLs to `/predict-from-media`. The API converts browser `.webm` media with FFmpeg, extracts 62 audio features with OpenSMILE/librosa, extracts 49 video features with OpenFace, then runs the learned multimodal model.

@@ -74,6 +74,20 @@ type MeditationSession = {
   mins: number;
   label: string;
   desc: string;
+  theme: string;
+  intention: string;
+  icon: LucideIcon;
+  accent: string;
+  ambientSrc: string;
+  ambientLabel: string;
+  phases: MeditationPhase[];
+};
+
+type MeditationPhase = {
+  start: number;
+  title: string;
+  cue: string;
+  guidance: string;
 };
 
 type AudioCategory = "stress relief" | "sleep" | "focus" | "meditation" | "relaxation";
@@ -107,9 +121,60 @@ const BREATH_MODES = {
 type BreathKey = keyof typeof BREATH_MODES;
 
 const MEDITATION_SESSIONS: MeditationSession[] = [
-  { mins: 2, label: "Quick Reset", desc: "Short calming pause" },
-  { mins: 5, label: "Gentle Reset", desc: "Settle your mind" },
-  { mins: 10, label: "Deep Calm", desc: "Full body relaxation" },
+  {
+    mins: 2,
+    label: "Quick Reset",
+    desc: "Fast grounding for stress spikes",
+    theme: "Grounding",
+    intention: "Return attention to the present moment with breath, body, and one small anchor.",
+    icon: Sparkles,
+    accent: "#22d3ee",
+    ambientSrc: "/audio/wellness/calm.mp3",
+    ambientLabel: "Soft calm ambience",
+    phases: [
+      { start: 0, title: "Arrive", cue: "Drop your shoulders.", guidance: "Sit comfortably. Let your hands rest. Notice that this moment is safe enough to pause." },
+      { start: 0.25, title: "Breathe", cue: "Inhale 4, exhale 6.", guidance: "Breathe in gently for four counts. Breathe out slowly for six counts. Let the exhale soften your body." },
+      { start: 0.55, title: "Ground", cue: "Name what is here.", guidance: "Notice one thing you can see, one thing you can feel, and one sound around you." },
+      { start: 0.82, title: "Return", cue: "Choose one next step.", guidance: "Take one final breath and choose the smallest helpful action you can do next." },
+    ],
+  },
+  {
+    mins: 5,
+    label: "Gentle Reset",
+    desc: "Breath and body scan",
+    theme: "Body scan",
+    intention: "Reduce mental noise by relaxing the body from face to feet.",
+    icon: Waves,
+    accent: "#34d399",
+    ambientSrc: "/audio/wellness/nature.mp3",
+    ambientLabel: "Nature meditation ambience",
+    phases: [
+      { start: 0, title: "Settle In", cue: "Find a steady posture.", guidance: "Let your spine be easy, not stiff. Allow your eyes to soften or close." },
+      { start: 0.18, title: "Breath Anchor", cue: "Follow the breath.", guidance: "Notice where the breath is easiest to feel: nose, chest, or belly. Stay with that place." },
+      { start: 0.4, title: "Body Scan", cue: "Relax face, jaw, shoulders.", guidance: "Move attention through your face, jaw, neck, and shoulders. Release any unnecessary effort." },
+      { start: 0.65, title: "Steady Mind", cue: "Thoughts can pass.", guidance: "If thoughts appear, label them thinking and return gently to your breath." },
+      { start: 0.86, title: "Close Kindly", cue: "Notice one useful feeling.", guidance: "Before ending, notice one small sign of calm, steadiness, or courage." },
+    ],
+  },
+  {
+    mins: 10,
+    label: "Deep Calm",
+    desc: "Longer emotional regulation",
+    theme: "Deep calm",
+    intention: "Create a longer calm state through breathing, body relaxation, and compassionate reflection.",
+    icon: Moon,
+    accent: "#a78bfa",
+    ambientSrc: "/audio/wellness/ocean.mp3",
+    ambientLabel: "Ocean relaxation ambience",
+    phases: [
+      { start: 0, title: "Prepare", cue: "Make space.", guidance: "Sit or lie down comfortably. Let the room hold you for the next few minutes." },
+      { start: 0.12, title: "Slow Breathing", cue: "Breathe low and slow.", guidance: "Let each inhale be quiet. Let each exhale be longer than the inhale." },
+      { start: 0.28, title: "Full Body Release", cue: "Soften from head to feet.", guidance: "Scan slowly from the top of the head to the feet, releasing tension area by area." },
+      { start: 0.5, title: "Emotional Space", cue: "Make room for feelings.", guidance: "If a feeling is present, name it gently. You do not have to fight it or solve it right now." },
+      { start: 0.72, title: "Compassion", cue: "Speak kindly inward.", guidance: "Offer yourself one kind sentence, like: I am doing my best in this moment." },
+      { start: 0.9, title: "Reorient", cue: "Return slowly.", guidance: "Feel the support under you. Notice the room again. Carry one calm breath into what comes next." },
+    ],
+  },
 ];
 
 const TRACKS: AudioTrack[] = [
@@ -518,6 +583,12 @@ function ToolStat({ label, value }: { label: string; value: string }) {
   );
 }
 
+const getMeditationPhase = (session: MeditationSession, elapsed: number, total: number) => {
+  if (!total) return session.phases[0];
+  const progress = elapsed / total;
+  return session.phases.reduce((current, phase) => (progress >= phase.start ? phase : current), session.phases[0]);
+};
+
 function Meditation({
   streak,
   onComplete,
@@ -528,7 +599,40 @@ function Meditation({
   const [active, setActive] = useState<number | null>(null);
   const [running, setRunning] = useState(false);
   const [elapsed, setElapsed] = useState(0);
+  const [ambientEnabled, setAmbientEnabled] = useState(true);
   const completedRef = useRef(false);
+  const ambientRef = useRef<HTMLAudioElement | null>(null);
+
+  const session = active !== null ? MEDITATION_SESSIONS[active] : null;
+  const total = session ? session.mins * 60 : 0;
+  const percent = total ? (elapsed / total) * 100 : 0;
+  const done = total > 0 && elapsed >= total;
+  const phase = session ? getMeditationPhase(session, elapsed, total) : null;
+
+  const stopAmbience = useCallback(() => {
+    if (!ambientRef.current) return;
+    ambientRef.current.pause();
+    ambientRef.current.currentTime = 0;
+    ambientRef.current.src = "";
+    ambientRef.current = null;
+  }, []);
+
+  const playAmbience = useCallback(
+    async (current: MeditationSession) => {
+      if (!ambientEnabled) return;
+      stopAmbience();
+      const audio = new Audio(current.ambientSrc);
+      audio.loop = true;
+      audio.volume = 0.35;
+      ambientRef.current = audio;
+      try {
+        await audio.play();
+      } catch {
+        toast({ title: "Ambient audio blocked", description: "Use the sound button after starting if your browser blocks autoplay." });
+      }
+    },
+    [ambientEnabled, stopAmbience],
+  );
 
   useEffect(() => {
     if (!running || active === null) return;
@@ -546,104 +650,227 @@ function Meditation({
     return () => window.clearInterval(id);
   }, [active, running]);
 
-  const total = active !== null ? MEDITATION_SESSIONS[active].mins * 60 : 0;
-  const percent = total ? (elapsed / total) * 100 : 0;
-  const done = total > 0 && elapsed >= total;
-
   useEffect(() => {
     if (active === null || !done || completedRef.current) return;
     completedRef.current = true;
+    stopAmbience();
     onComplete(MEDITATION_SESSIONS[active], total);
-  }, [active, done, onComplete, total]);
+  }, [active, done, onComplete, stopAmbience, total]);
+
+  useEffect(() => () => stopAmbience(), [stopAmbience]);
+
+  const selectSession = (index: number) => {
+    stopAmbience();
+    setActive(index);
+    setElapsed(0);
+    setRunning(false);
+    completedRef.current = false;
+    window.speechSynthesis?.cancel();
+  };
+
+  const startSession = () => {
+    if (!session) return;
+    setRunning(true);
+    void playAmbience(session);
+  };
+
+  const pauseSession = () => {
+    setRunning(false);
+    ambientRef.current?.pause();
+    window.speechSynthesis?.cancel();
+  };
+
+  const resumeSession = () => {
+    if (!session) return;
+    setRunning(true);
+    if (ambientEnabled && ambientRef.current) {
+      ambientRef.current.play().catch(() => undefined);
+    } else {
+      void playAmbience(session);
+    }
+  };
+
+  const toggleAmbience = () => {
+    if (!session) {
+      setAmbientEnabled((value) => !value);
+      return;
+    }
+    if (ambientEnabled) {
+      setAmbientEnabled(false);
+      stopAmbience();
+    } else {
+      setAmbientEnabled(true);
+      if (running) void playAmbience(session);
+    }
+  };
+
+  const speakGuidance = () => {
+    if (!phase || !("speechSynthesis" in window)) return;
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(`${phase.title}. ${phase.guidance}`);
+    utterance.rate = 0.88;
+    utterance.pitch = 0.95;
+    window.speechSynthesis.speak(utterance);
+  };
 
   return (
-    <section id="meditation-tools" className="premium-card p-5 md:p-6">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <h2 className="flex items-center gap-2 text-xl font-bold">
-            <Brain className="h-5 w-5 text-primary" />
-            Meditation Sessions
-          </h2>
-          <p className="mt-1 text-sm text-muted-foreground">Streaks sync to your account across devices.</p>
+    <section id="meditation-tools" className="premium-card relative overflow-hidden p-5 md:p-6">
+      <div className="premium-grid pointer-events-none absolute inset-0 opacity-20" />
+      <div className="pointer-events-none absolute -right-20 top-4 h-56 w-56 rounded-full bg-primary/10 blur-3xl" />
+      <div className="relative">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h2 className="flex items-center gap-2 text-xl font-bold">
+              <Brain className="h-5 w-5 text-primary" />
+              Guided Meditation
+            </h2>
+            <p className="mt-1 text-sm text-muted-foreground">Choose a guided path with live prompts, ambient sound, and account streak tracking.</p>
+          </div>
+          <span className="rounded-full border border-primary/20 bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
+            {streak?.streak_count ?? 0} day streak
+          </span>
         </div>
-        <span className="rounded-full border border-primary/20 bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
-          {streak?.streak_count ?? 0} day streak
-        </span>
-      </div>
 
-      <div className="mt-5 grid gap-3 md:grid-cols-3">
-        {MEDITATION_SESSIONS.map((session, index) => (
-          <button
-            key={session.mins}
-            type="button"
-            onClick={() => {
-              setActive(index);
-              setElapsed(0);
-              setRunning(false);
-              completedRef.current = false;
-            }}
-            className={`rounded-2xl border p-4 text-left transition ${
-              active === index ? "border-primary/35 bg-primary/12" : "border-white/10 bg-white/[0.04] hover:bg-white/[0.06]"
-            }`}
-          >
-            <div className="text-2xl font-extrabold text-primary">
-              {session.mins}
-              <span className="text-sm">m</span>
+        <div className="mt-5 grid gap-3 md:grid-cols-3">
+          {MEDITATION_SESSIONS.map((item, index) => {
+            const Icon = item.icon;
+            return (
+              <button
+                key={item.label}
+                type="button"
+                onClick={() => selectSession(index)}
+                className={`group rounded-2xl border p-4 text-left transition ${
+                  active === index ? "border-primary/35 bg-primary/12 shadow-[0_0_36px_rgba(45,212,191,0.1)]" : "border-white/10 bg-white/[0.04] hover:bg-white/[0.06]"
+                }`}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex h-11 w-11 items-center justify-center rounded-xl text-[#06101d]" style={{ backgroundColor: item.accent }}>
+                    <Icon className="h-5 w-5" />
+                  </div>
+                  <span className="rounded-full border border-white/10 bg-black/10 px-2.5 py-1 text-xs font-bold text-muted-foreground">
+                    {item.mins}m
+                  </span>
+                </div>
+                <div className="mt-4 font-extrabold">{item.label}</div>
+                <div className="mt-1 text-xs font-semibold text-primary">{item.theme}</div>
+                <div className="mt-2 text-xs leading-5 text-muted-foreground">{item.desc}</div>
+              </button>
+            );
+          })}
+        </div>
+
+        {session && phase && (
+          <div className="mt-6 rounded-[1.5rem] border border-white/10 bg-black/10 p-5">
+            <div className="grid gap-5 lg:grid-cols-[16rem_minmax(0,1fr)] lg:items-stretch">
+              <div className="flex flex-col items-center justify-center rounded-[1.25rem] border border-white/10 bg-white/[0.035] p-4">
+                <div className="relative h-48 w-48">
+                  <motion.div
+                    className="absolute inset-8 rounded-full blur-2xl"
+                    style={{ backgroundColor: session.accent }}
+                    animate={running ? { scale: [0.95, 1.18, 0.95], opacity: [0.22, 0.42, 0.22] } : { scale: 1, opacity: 0.2 }}
+                    transition={{ duration: 6, repeat: running ? Infinity : 0, ease: "easeInOut" }}
+                  />
+                  <svg viewBox="0 0 200 200" className="relative h-full w-full -rotate-90">
+                    <circle cx="100" cy="100" r="80" stroke="rgba(255,255,255,0.1)" strokeWidth="12" fill="none" />
+                    <motion.circle
+                      cx="100"
+                      cy="100"
+                      r="80"
+                      stroke={session.accent}
+                      strokeWidth="12"
+                      fill="none"
+                      strokeLinecap="round"
+                      strokeDasharray={2 * Math.PI * 80}
+                      animate={{ strokeDashoffset: 2 * Math.PI * 80 * (1 - percent / 100) }}
+                      transition={{ duration: 0.5 }}
+                    />
+                  </svg>
+                  <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
+                    {done ? (
+                      <>
+                        <CheckCircle2 className="h-8 w-8 text-primary" />
+                        <div className="mt-1 text-sm font-semibold">Saved</div>
+                      </>
+                    ) : (
+                      <>
+                        <div className="text-3xl font-extrabold">{formatTime(total - elapsed)}</div>
+                        <div className="text-xs text-muted-foreground">remaining</div>
+                      </>
+                    )}
+                  </div>
+                </div>
+                <div className="mt-4 grid w-full grid-cols-2 gap-2 text-center">
+                  <ToolStat label="Elapsed" value={formatTime(elapsed)} />
+                  <ToolStat label="Session" value={`${session.mins}m`} />
+                </div>
+              </div>
+
+              <div className="min-w-0 rounded-[1.25rem] border border-white/10 bg-white/[0.035] p-4">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <div className="text-xs font-extrabold uppercase tracking-[0.16em] text-primary">{session.theme}</div>
+                    <h3 className="mt-2 text-2xl font-extrabold">{phase.title}</h3>
+                  </div>
+                  <span className="rounded-full border border-white/10 bg-black/10 px-3 py-1 text-xs font-semibold text-muted-foreground">
+                    {session.ambientLabel}
+                  </span>
+                </div>
+
+                <p className="mt-3 text-sm leading-6 text-muted-foreground">{session.intention}</p>
+
+                <div className="mt-5 rounded-2xl border border-primary/20 bg-primary/10 p-4">
+                  <div className="text-xs font-bold uppercase tracking-[0.14em] text-primary">Current guidance</div>
+                  <p className="mt-2 text-lg font-extrabold leading-snug">{phase.cue}</p>
+                  <p className="mt-2 text-sm leading-6 text-muted-foreground">{phase.guidance}</p>
+                </div>
+
+                <div className="mt-5 space-y-2">
+                  {session.phases.map((item) => {
+                    const activePhase = item.title === phase.title;
+                    const passed = percent / 100 >= item.start;
+                    return (
+                      <div key={item.title} className={`flex items-center gap-3 rounded-2xl border px-3 py-2 text-sm transition ${activePhase ? "border-primary/35 bg-primary/12" : "border-white/10 bg-black/10"}`}>
+                        <span
+                          className={`h-2.5 w-2.5 rounded-full ${passed ? "bg-primary" : "bg-white/20"}`}
+                          style={activePhase ? { backgroundColor: session.accent } : undefined}
+                        />
+                        <div className="min-w-0 flex-1">
+                          <div className="font-bold">{item.title}</div>
+                          <div className="text-xs text-muted-foreground">{item.cue}</div>
+                        </div>
+                        <span className="text-xs font-semibold text-muted-foreground">{Math.round(item.start * session.mins * 60)}s</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
             </div>
-            <div className="mt-1 font-bold">{session.label}</div>
-            <div className="mt-1 text-xs text-muted-foreground">{session.desc}</div>
-          </button>
-        ))}
-      </div>
 
-      {active !== null && (
-        <div className="mt-6 flex flex-col items-center rounded-[1.5rem] border border-white/10 bg-black/10 p-5">
-          <div className="relative h-44 w-44">
-            <svg viewBox="0 0 200 200" className="h-full w-full -rotate-90">
-              <circle cx="100" cy="100" r="80" stroke="rgba(255,255,255,0.1)" strokeWidth="12" fill="none" />
-              <motion.circle
-                cx="100"
-                cy="100"
-                r="80"
-                stroke="hsl(var(--primary))"
-                strokeWidth="12"
-                fill="none"
-                strokeLinecap="round"
-                strokeDasharray={2 * Math.PI * 80}
-                animate={{ strokeDashoffset: 2 * Math.PI * 80 * (1 - percent / 100) }}
-                transition={{ duration: 0.5 }}
-              />
-            </svg>
-            <div className="absolute inset-0 flex flex-col items-center justify-center">
-              {done ? (
-                <>
-                  <CheckCircle2 className="h-8 w-8 text-primary" />
-                  <div className="mt-1 text-sm font-semibold">Saved</div>
-                </>
-              ) : (
-                <>
-                  <div className="text-3xl font-extrabold">{formatTime(total - elapsed)}</div>
-                  <div className="text-xs text-muted-foreground">remaining</div>
-                </>
+            <div className="mt-5 flex flex-wrap items-center justify-center gap-3">
+              {!running && !done && (
+                <Button className="premium-button" onClick={elapsed > 0 ? resumeSession : startSession}>
+                  <Play className="h-4 w-4" />
+                  {elapsed > 0 ? "Continue Guided Session" : "Start Guided Session"}
+                </Button>
               )}
+              {running && (
+                <Button variant="outline" className="rounded-full border-white/10 bg-white/[0.04]" onClick={pauseSession}>
+                  <Pause className="h-4 w-4" />
+                  Pause
+                </Button>
+              )}
+              <Button variant="outline" className="rounded-full border-white/10 bg-white/[0.04]" onClick={toggleAmbience}>
+                <Volume2 className="h-4 w-4" />
+                {ambientEnabled ? "Ambient on" : "Ambient off"}
+              </Button>
+              <Button variant="outline" className="rounded-full border-white/10 bg-white/[0.04]" onClick={speakGuidance} disabled={!phase}>
+                <Sparkles className="h-4 w-4" />
+                Read guidance
+              </Button>
             </div>
           </div>
-          <div className="mt-5 flex flex-wrap justify-center gap-3">
-            {!running && !done && (
-              <Button className="premium-button" onClick={() => setRunning(true)}>
-                <Play className="h-4 w-4" />
-                {elapsed > 0 ? "Continue" : "Start Meditation"}
-              </Button>
-            )}
-            {running && (
-              <Button variant="outline" className="rounded-full border-white/10 bg-white/[0.04]" onClick={() => setRunning(false)}>
-                <Pause className="h-4 w-4" />
-                Pause
-              </Button>
-            )}
-          </div>
-        </div>
-      )}
+        )}
+      </div>
     </section>
   );
 }
@@ -1375,7 +1602,12 @@ export default function Therapy() {
         activity_type: "meditation",
         title: `${session.label} meditation`,
         duration_seconds: durationSeconds,
-        metadata: { minutes: session.mins },
+        metadata: {
+          minutes: session.mins,
+          theme: session.theme,
+          ambience: session.ambientLabel,
+          phases: session.phases.map((phase) => phase.title),
+        },
       });
       toast({
         title: "Meditation saved",

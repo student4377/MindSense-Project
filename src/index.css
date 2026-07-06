@@ -345,16 +345,797 @@
 
 }
 
+.wellness-report-print {
+  font-family: 'Inter', system-ui, sans-serif;
+}
+
+.wellness-report-print h1,
+.wellness-report-print h2,
+.wellness-report-print h3,
+.wellness-report-print h4 {
+  font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+}
+
+.report-print-page {
+  position: relative;
+  display: flex;
+  min-height: 297mm;
+  width: 210mm;
+  flex-direction: column;
+  gap: 4.8mm;
+  overflow: hidden;
+  box-sizing: border-box;
+  padding: 12mm;
+  background: #ffffff;
+  color: #0f172a;
+}
+
+.report-cover {
+  border: 1px solid #bfdbfe;
+  border-radius: 7mm;
+  background:
+    radial-gradient(circle at 88% 12%, rgba(20, 184, 166, 0.16), transparent 30%),
+    linear-gradient(135deg, #f8fafc 0%, #ecfeff 52%, #f5f3ff 100%);
+  padding: 7mm;
+}
+
+.report-brand-row {
+  display: flex;
+  align-items: center;
+  gap: 3mm;
+}
+
+.report-logo-mark {
+  display: flex;
+  height: 12mm;
+  width: 12mm;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4mm;
+  background: #0f766e;
+  color: #ffffff;
+}
+
+.report-logo-title {
+  font-size: 15px;
+  font-weight: 900;
+  color: #020617;
+}
+
+.report-logo-subtitle {
+  margin-top: 1px;
+  font-size: 9px;
+  font-weight: 700;
+  color: #64748b;
+}
+
+.report-cover-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 48mm;
+  gap: 7mm;
+  align-items: center;
+  margin-top: 7mm;
+}
+
+.report-eyebrow {
+  font-size: 9px;
+  font-weight: 900;
+  text-transform: uppercase;
+  color: #0f766e;
+}
+
+.report-cover h1 {
+  margin: 2.5mm 0 0;
+  max-width: 116mm;
+  color: #020617;
+  font-size: 28px;
+  line-height: 1.08;
+  font-weight: 900;
+}
+
+.report-cover p {
+  margin: 3mm 0 0;
+  max-width: 120mm;
+  color: #475569;
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+.mental-illustration {
+  position: relative;
+  height: 45mm;
+  border-radius: 7mm;
+  background:
+    radial-gradient(circle at 52% 40%, rgba(20, 184, 166, 0.2), transparent 42%),
+    linear-gradient(145deg, #ffffff, #dffafe);
+  border: 1px solid #bae6fd;
+  overflow: hidden;
+}
+
+.mental-head {
+  position: absolute;
+  left: 12mm;
+  top: 7mm;
+  height: 29mm;
+  width: 25mm;
+  border: 2px solid #0f766e;
+  border-radius: 48% 48% 44% 44%;
+  background: #ffffff;
+}
+
+.mental-face {
+  position: absolute;
+  left: 8mm;
+  top: 10mm;
+  height: 6mm;
+  width: 8mm;
+  border-bottom: 2px solid #14b8a6;
+  border-radius: 50%;
+}
+
+.mental-node {
+  position: absolute;
+  height: 3.2mm;
+  width: 3.2mm;
+  border-radius: 50%;
+  background: #0ea5e9;
+}
+
+.node-one {
+  left: 7mm;
+  top: 5mm;
+}
+
+.node-two {
+  left: 15mm;
+  top: 9mm;
+  background: #8b5cf6;
+}
+
+.node-three {
+  left: 10mm;
+  top: 16mm;
+  background: #14b8a6;
+}
+
+.mental-arc {
+  position: absolute;
+  left: 6mm;
+  top: 7mm;
+  height: 14mm;
+  width: 14mm;
+  border: 1.5px solid #c4b5fd;
+  border-left: 0;
+  border-bottom: 0;
+  border-radius: 50%;
+}
+
+.mental-card {
+  position: absolute;
+  right: 7mm;
+  height: 8mm;
+  border-radius: 3mm;
+  background: #ffffff;
+  border: 1px solid #dbeafe;
+  box-shadow: 0 8px 22px rgba(15, 23, 42, 0.08);
+}
+
+.card-one {
+  top: 11mm;
+  width: 20mm;
+}
+
+.card-two {
+  top: 23mm;
+  width: 28mm;
+}
+
+.report-patient-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 3mm;
+  margin-top: 6mm;
+}
+
+.print-info-card {
+  min-height: 15mm;
+  border-radius: 4mm;
+  border: 1px solid #e2e8f0;
+  background: rgba(255, 255, 255, 0.86);
+  padding: 3mm;
+}
+
+.print-info-card.wide {
+  grid-column: span 2;
+}
+
+.print-info-card span {
+  display: block;
+  color: #64748b;
+  font-size: 8.5px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.print-info-card strong {
+  display: block;
+  margin-top: 1.5mm;
+  color: #0f172a;
+  font-size: 10.5px;
+  line-height: 1.25;
+}
+
+.report-section {
+  border-radius: 5mm;
+  border: 1px solid #e2e8f0;
+  background: #ffffff;
+  padding: 4mm;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.05);
+}
+
+.report-section-header {
+  display: flex;
+  align-items: center;
+  gap: 3mm;
+  margin-bottom: 3.2mm;
+}
+
+.report-section-header.compact {
+  margin-bottom: 2.5mm;
+}
+
+.report-section-icon {
+  display: flex;
+  height: 8mm;
+  width: 8mm;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  border-radius: 2.8mm;
+  background: #ecfeff;
+  color: #0f766e;
+}
+
+.report-section-eyebrow {
+  color: #0f766e;
+  font-size: 8px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.report-section-header h3 {
+  margin: 0.4mm 0 0;
+  color: #020617;
+  font-size: 16px;
+  line-height: 1.15;
+  font-weight: 900;
+}
+
+.report-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 3mm;
+}
+
+.metric-tile {
+  min-height: 20mm;
+  border: 1px solid #e2e8f0;
+  border-top: 3px solid #0ea5e9;
+  border-radius: 4mm;
+  background: #f8fafc;
+  padding: 3mm;
+}
+
+.metric-tile div {
+  color: #64748b;
+  font-size: 8px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.metric-tile strong {
+  display: block;
+  margin-top: 2mm;
+  color: #020617;
+  font-size: 17px;
+  line-height: 1.1;
+  font-weight: 900;
+}
+
+.metric-tile .compact-value {
+  font-size: 11px;
+  line-height: 1.25;
+}
+
+.severity-meter {
+  padding-top: 2mm;
+}
+
+.severity-track {
+  position: relative;
+  display: grid;
+  height: 9mm;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  overflow: visible;
+  border-radius: 99px;
+  background: #e2e8f0;
+}
+
+.severity-track > div:first-child {
+  border-radius: 99px 0 0 99px;
+}
+
+.severity-track > div:nth-child(5) {
+  border-radius: 0 99px 99px 0;
+}
+
+.severity-marker {
+  position: absolute;
+  top: -4.2mm;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1mm;
+}
+
+.severity-marker b {
+  display: flex;
+  min-width: 12mm;
+  justify-content: center;
+  border-radius: 99px;
+  background: #0f172a;
+  color: #ffffff;
+  font-size: 8.5px;
+  padding: 1mm 2mm;
+}
+
+.severity-marker::after {
+  content: "";
+  height: 11mm;
+  width: 1.4mm;
+  border-radius: 99px;
+  background: #0f172a;
+}
+
+.severity-label-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 2mm;
+  margin-top: 4mm;
+}
+
+.severity-label-grid div {
+  color: #475569;
+  font-size: 8.5px;
+  line-height: 1.2;
+}
+
+.severity-label-grid strong {
+  display: block;
+  color: #0f172a;
+  font-size: 8.5px;
+}
+
+.severity-label-grid span {
+  display: block;
+  margin-top: 0.5mm;
+}
+
+.report-two-column {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4mm;
+  border: 0;
+  padding: 0;
+  box-shadow: none;
+  background: transparent;
+}
+
+.report-card {
+  border: 1px solid #e2e8f0;
+  border-radius: 5mm;
+  background: #ffffff;
+  padding: 4mm;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.05);
+}
+
+.report-narrative {
+  margin: 0;
+  color: #475569;
+  font-size: 10.5px;
+  line-height: 1.62;
+}
+
+.report-observation-list {
+  display: grid;
+  gap: 2mm;
+  margin-top: 3mm;
+}
+
+.report-observation-item {
+  display: grid;
+  grid-template-columns: 3mm minmax(0, 1fr);
+  gap: 2mm;
+  align-items: start;
+  border-radius: 3mm;
+  background: #f8fafc;
+  padding: 2mm;
+}
+
+.report-observation-item span {
+  height: 2.2mm;
+  width: 2.2mm;
+  margin-top: 1.5mm;
+  border-radius: 50%;
+  background: #0f766e;
+}
+
+.report-observation-item p {
+  margin: 0;
+  color: #475569;
+  font-size: 9px;
+  line-height: 1.45;
+}
+
+.risk-row {
+  display: flex;
+  align-items: center;
+  gap: 2mm;
+  margin-bottom: 2mm;
+}
+
+.risk-dot {
+  height: 3mm;
+  width: 3mm;
+  border-radius: 50%;
+}
+
+.report-page-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  border-bottom: 1px solid #e2e8f0;
+  padding-bottom: 4mm;
+}
+
+.report-page-header h2 {
+  margin: 1.5mm 0 0;
+  color: #020617;
+  font-size: 24px;
+  line-height: 1.12;
+  font-weight: 900;
+}
+
+.report-id-pill {
+  border: 1px solid #dbeafe;
+  border-radius: 99px;
+  background: #eff6ff;
+  color: #1d4ed8;
+  font-size: 9px;
+  font-weight: 900;
+  padding: 2mm 4mm;
+}
+
+.symptom-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 2.4mm 4mm;
+}
+
+.symptom-row {
+  border-radius: 3.5mm;
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+  padding: 2.4mm;
+}
+
+.symptom-row.dark {
+  border-color: rgba(255, 255, 255, 0.1);
+  background: rgba(0, 0, 0, 0.15);
+}
+
+.symptom-row-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 3mm;
+  font-size: 9.5px;
+}
+
+.symptom-row-top strong {
+  color: #0f172a;
+}
+
+.symptom-row.dark .symptom-row-top strong {
+  color: hsl(var(--foreground));
+}
+
+.symptom-row-top span {
+  color: #0f766e;
+  font-weight: 900;
+}
+
+.symptom-bar-track {
+  height: 2mm;
+  overflow: hidden;
+  border-radius: 99px;
+  background: #e2e8f0;
+  margin-top: 1.8mm;
+}
+
+.symptom-row.dark .symptom-bar-track {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.symptom-bar-track div {
+  height: 100%;
+  border-radius: 99px;
+  background: linear-gradient(90deg, #14b8a6, #0ea5e9);
+}
+
+.symptom-row p {
+  margin: 1.7mm 0 0;
+  color: #64748b;
+  font-size: 8.5px;
+  line-height: 1.35;
+}
+
+.symptom-row.dark p {
+  color: hsl(var(--muted-foreground));
+}
+
+.score-table {
+  overflow: hidden;
+  border: 1px solid #e2e8f0;
+  border-radius: 4mm;
+}
+
+.score-table > div {
+  display: grid;
+  grid-template-columns: 28mm minmax(0, 1fr);
+  border-top: 1px solid #e2e8f0;
+}
+
+.score-table > div:first-child {
+  border-top: 0;
+}
+
+.score-table span {
+  padding: 2mm 3mm;
+  color: #475569;
+  font-size: 9px;
+  font-weight: 700;
+}
+
+.score-table-head span {
+  background: #f8fafc;
+  color: #0f172a;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.score-table .active span {
+  background: #ecfeff;
+  color: #0f766e;
+  font-weight: 900;
+}
+
+.confidence-layout {
+  display: grid;
+  grid-template-columns: 27mm minmax(0, 1fr);
+  gap: 4mm;
+  align-items: center;
+}
+
+.confidence-layout p {
+  margin: 0;
+  color: #475569;
+  font-size: 10px;
+  line-height: 1.55;
+}
+
+.print-gauge {
+  display: flex;
+  height: 25mm;
+  width: 25mm;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+}
+
+.print-gauge > div {
+  display: flex;
+  height: 19mm;
+  width: 19mm;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: #ffffff;
+}
+
+.print-gauge strong {
+  color: #020617;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.print-gauge span {
+  margin-top: 0.5mm;
+  color: #64748b;
+  font-size: 5.8px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.progress-placeholder {
+  display: grid;
+  grid-template-columns: 35mm minmax(0, 1fr);
+  gap: 4mm;
+  align-items: center;
+}
+
+.progress-mini-chart {
+  display: flex;
+  align-items: end;
+  gap: 2mm;
+  height: 24mm;
+  border-radius: 4mm;
+  background: #f8fafc;
+  padding: 3mm;
+}
+
+.progress-mini-chart span {
+  flex: 1;
+  border-radius: 99px 99px 0 0;
+  background: linear-gradient(180deg, #14b8a6, #0ea5e9);
+}
+
+.progress-placeholder strong {
+  color: #020617;
+  font-size: 11px;
+}
+
+.progress-placeholder p {
+  margin: 1.5mm 0 0;
+  color: #475569;
+  font-size: 9.5px;
+  line-height: 1.55;
+}
+
+.report-modality-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 3mm;
+}
+
+.print-modality-card {
+  border: 1px solid #e2e8f0;
+  border-radius: 4mm;
+  background: #f8fafc;
+  padding: 3mm;
+}
+
+.print-modality-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.print-modality-head span {
+  display: flex;
+  height: 8mm;
+  width: 8mm;
+  align-items: center;
+  justify-content: center;
+  border-radius: 2.5mm;
+  color: #ffffff;
+}
+
+.print-modality-head strong {
+  color: #020617;
+  font-size: 16px;
+  font-weight: 900;
+}
+
+.print-modality-card h4 {
+  margin: 2mm 0 0;
+  color: #020617;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.print-modality-card p {
+  margin: 1.5mm 0 0;
+  color: #475569;
+  font-size: 8.5px;
+  line-height: 1.35;
+}
+
+.print-modality-card small {
+  display: block;
+  margin-top: 1.8mm;
+  color: #64748b;
+  font-size: 7.8px;
+  font-weight: 800;
+}
+
+.print-modality-track {
+  height: 1.8mm;
+  overflow: hidden;
+  border-radius: 99px;
+  background: #e2e8f0;
+  margin-top: 2mm;
+}
+
+.print-modality-track div {
+  height: 100%;
+  border-radius: 99px;
+}
+
+.recommendation-list {
+  display: grid;
+  gap: 2mm;
+}
+
+.recommendation-item {
+  display: grid;
+  grid-template-columns: 6.5mm minmax(0, 1fr);
+  gap: 2.5mm;
+  align-items: start;
+  border-radius: 3.5mm;
+  background: #f8fafc;
+  padding: 2.2mm;
+}
+
+.recommendation-item span {
+  display: flex;
+  height: 6.5mm;
+  width: 6.5mm;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: #0f766e;
+  color: #ffffff;
+  font-size: 8px;
+  font-weight: 900;
+}
+
+.recommendation-item p {
+  margin: 0;
+  color: #475569;
+  font-size: 9.5px;
+  line-height: 1.45;
+}
+
+.disclaimer-card {
+  background: #fffbeb;
+  border-color: #fde68a;
+}
+
+.report-print-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: auto;
+  border-top: 1px solid #e2e8f0;
+  padding-top: 3mm;
+  color: #64748b;
+  font-size: 8.5px;
+  font-weight: 800;
+}
+
 @media print {
   @page {
     size: A4;
-    margin: 12mm;
+    margin: 0;
   }
 
   html,
   body {
-    width: auto !important;
-    min-height: auto !important;
+    width: 210mm !important;
+    min-height: 297mm !important;
     margin: 0 !important;
     padding: 0 !important;
     background: white !important;
@@ -377,9 +1158,10 @@
 
   .wellness-report-print {
     display: block !important;
-    position: static !important;
-    width: auto !important;
-    min-height: auto !important;
+    position: absolute !important;
+    inset: 0 auto auto 0 !important;
+    width: 210mm !important;
+    min-height: 297mm !important;
     margin: 0 !important;
     padding: 0 !important;
     border-radius: 0 !important;
@@ -389,12 +1171,13 @@
   }
 
   .wellness-report-print .report-print-page {
-    display: block !important;
-    min-height: 250mm !important;
+    display: flex !important;
+    min-height: 297mm !important;
+    width: 210mm !important;
     box-sizing: border-box !important;
-    padding: 0 !important;
+    padding: 12mm !important;
     background: white !important;
-    overflow: visible !important;
+    overflow: hidden !important;
   }
 
   .wellness-report-print .report-print-page:not(:first-child) {
@@ -410,7 +1193,9 @@
   .wellness-report-print .report-print-page,
   .wellness-report-print .report-print-section,
   .wellness-report-print .report-print-modalities,
-  .wellness-report-print .report-print-card {
+  .wellness-report-print .report-print-card,
+  .wellness-report-print .report-card,
+  .wellness-report-print .report-section {
     break-inside: avoid-page !important;
     page-break-inside: avoid !important;
   }
